@@ -114,11 +114,6 @@ const DashboardScreen = ({ navigation }) => {
           >
             <Icon name="pencil" size={24} color="#007AFF" />
           </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => navigation.navigate('Lead', { propertyId: property.id })}
-          >
-            <Icon name="account-plus" size={24} color="#007AFF" />
-          </TouchableOpacity>
           <TouchableOpacity onPress={() => handleDeleteProperty(property.id)}>
             <Icon name="delete" size={24} color="#FF3B30" />
           </TouchableOpacity>

@@ -1,5 +1,5 @@
 import React from 'react';
-import { SafeAreaView, StatusBar, TouchableOpacity, Text, StyleSheet } from 'react-native';
+import { SafeAreaView, StatusBar, StyleSheet } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Provider } from 'react-redux';
@@ -7,7 +7,6 @@ import { store } from './src/store';
 import DashboardScreen from './src/screens/DashboardScreen';
 import PropertyScreen from './src/screens/PropertyScreen';
 import RoomScreen from './src/screens/RoomScreen';
-import LeadScreen from './src/screens/LeadScreen';
 import { enableScreens } from 'react-native-screens';
 
 enableScreens();
@@ -39,17 +38,7 @@ export default function App() {
             <Stack.Screen 
               name="Dashboard" 
               component={DashboardScreen}
-              options={({ navigation }) => ({ 
-                title: 'Rent Manager',
-                headerRight: () => (
-                  <TouchableOpacity
-                    onPress={() => navigation.navigate('Property', { isNew: true })}
-                    style={styles.addButton}
-                  >
-                    <Text style={styles.addButtonText}>Add Property</Text>
-                  </TouchableOpacity>
-                ),
-              })}
+              options={{ title: 'Rent Manager' }}
             />
             <Stack.Screen 
               name="Property" 
@@ -60,11 +49,6 @@ export default function App() {
               name="Room" 
               component={RoomScreen}
               options={{ title: 'Room Details' }}
-            />
-            <Stack.Screen 
-              name="Lead" 
-              component={LeadScreen}
-              options={{ title: 'Lead Details' }}
             />
           </Stack.Navigator>
         </NavigationContainer>
@@ -77,12 +61,5 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f5f5f5',
-  },
-  addButton: {
-    marginRight: 15,
-  },
-  addButtonText: {
-    color: '#007AFF',
-    fontWeight: 'bold',
   },
 }); 

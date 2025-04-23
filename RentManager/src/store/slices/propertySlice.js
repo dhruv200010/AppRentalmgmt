@@ -14,7 +14,6 @@ const propertySlice = createSlice({
         id: state.nextPropertyId,
         name: action.payload.name,
         rooms: [],
-        leads: [],
       };
       state.properties.push(newProperty);
       state.nextPropertyId += 1;
@@ -67,38 +66,6 @@ const propertySlice = createSlice({
         property.rooms = property.rooms.filter((room) => room.id !== roomId);
       }
     },
-    addLead: (state, action) => {
-      const { propertyId, ...leadData } = action.payload;
-      const property = state.properties.find((p) => p.id === propertyId);
-      if (property) {
-        const newLead = {
-          ...leadData,
-          id: (property.leads.length + 1).toString(),
-          createdAt: new Date().toISOString(),
-        };
-        property.leads.push(newLead);
-      }
-    },
-    updateLead: (state, action) => {
-      const { propertyId, leadId, updates } = action.payload;
-      const property = state.properties.find((p) => p.id === propertyId);
-      if (property) {
-        const leadIndex = property.leads.findIndex((l) => l.id === leadId);
-        if (leadIndex !== -1) {
-          property.leads[leadIndex] = {
-            ...property.leads[leadIndex],
-            ...updates,
-          };
-        }
-      }
-    },
-    deleteLead: (state, action) => {
-      const { propertyId, leadId } = action.payload;
-      const property = state.properties.find((p) => p.id === propertyId);
-      if (property) {
-        property.leads = property.leads.filter((lead) => lead.id !== leadId);
-      }
-    },
   },
 });
 
@@ -109,9 +76,6 @@ export const {
   addRoom,
   updateRoom,
   deleteRoom,
-  addLead,
-  updateLead,
-  deleteLead,
 } = propertySlice.actions;
 
 export default propertySlice.reducer; 
