@@ -386,7 +386,13 @@ const DashboardScreen = ({ navigation }) => {
             {item.category} • {item.source} • {item.location}
           </Text>
           <Text style={styles.leadAlert}>
-            Alert: {new Date(item.alertTime).toLocaleString()}
+            Alert: {new Date(item.alertTime).toLocaleString([], { 
+              year: 'numeric',
+              month: 'numeric',
+              day: 'numeric',
+              hour: '2-digit',
+              minute: '2-digit'
+            })}
           </Text>
         </View>
         <View style={styles.leadActions}>
@@ -647,7 +653,7 @@ const DashboardScreen = ({ navigation }) => {
                 onPress={() => showPicker('time')}
               >
                 <Text style={styles.dateButtonText}>
-                  Time: {alertTime.toLocaleTimeString()}
+                  Time: {alertTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                 </Text>
               </TouchableOpacity>
             </View>
