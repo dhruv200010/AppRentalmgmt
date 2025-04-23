@@ -62,6 +62,7 @@ const DashboardScreen = ({ navigation }) => {
   const [pickerMode, setPickerMode] = useState('date');
   const [alertTime, setAlertTime] = useState(new Date());
   const [searchQuery, setSearchQuery] = useState('');
+  const [activeTab, setActiveTab] = useState('properties');
 
   const handleAddProperty = () => {
     if (!propertyName.trim()) {
@@ -449,58 +450,78 @@ const DashboardScreen = ({ navigation }) => {
 
   return (
     <View style={styles.container}>
-      <TouchableOpacity
-        style={styles.addPropertyButton}
-        onPress={() => setPropertyModalVisible(true)}
-      >
-        <Text style={styles.addPropertyButtonText}>Add Property</Text>
-      </TouchableOpacity>
-
       <View style={styles.contentContainer}>
-        <View style={styles.propertiesSection}>
-          {properties.map(renderProperty)}
-        </View>
-        
-        <View style={styles.alertsSection}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Alerts</Text>
+        {activeTab === 'properties' ? (
+          <View style={styles.section}>
+            <ScrollView style={styles.propertiesSection}>
+              {properties.map(renderProperty)}
+            </ScrollView>
             <TouchableOpacity
-              style={styles.addLeadButton}
+              style={styles.fab}
+              onPress={() => setPropertyModalVisible(true)}
+            >
+              <Icon name="plus" size={24} color="white" />
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Alerts</Text>
+            </View>
+            <View style={styles.searchContainer}>
+              <Icon name="magnify" size={20} color="#666" style={styles.searchIcon} />
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Search leads..."
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+              />
+              {searchQuery ? (
+                <TouchableOpacity
+                  onPress={() => setSearchQuery('')}
+                  style={styles.clearButton}
+                >
+                  <Icon name="close-circle" size={20} color="#666" />
+                </TouchableOpacity>
+              ) : null}
+            </View>
+            <View style={styles.alertsContainer}>
+              <FlatList
+                data={filteredLeads}
+                renderItem={renderLead}
+                keyExtractor={(item) => item.id}
+                contentContainerStyle={styles.leadsList}
+                nestedScrollEnabled={true}
+              />
+            </View>
+            <TouchableOpacity
+              style={styles.fab}
               onPress={() => {
                 resetLeadForm();
                 setLeadModalVisible(true);
               }}
             >
-              <Text style={styles.addLeadButtonText}>Add Lead</Text>
+              <Icon name="plus" size={24} color="white" />
             </TouchableOpacity>
           </View>
-          <View style={styles.searchContainer}>
-            <Icon name="magnify" size={20} color="#666" style={styles.searchIcon} />
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Search leads..."
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-            />
-            {searchQuery ? (
-              <TouchableOpacity
-                onPress={() => setSearchQuery('')}
-                style={styles.clearButton}
-              >
-                <Icon name="close-circle" size={20} color="#666" />
-              </TouchableOpacity>
-            ) : null}
-          </View>
-          <View style={styles.alertsContainer}>
-            <FlatList
-              data={filteredLeads}
-              renderItem={renderLead}
-              keyExtractor={(item) => item.id}
-              contentContainerStyle={styles.leadsList}
-              nestedScrollEnabled={true}
-            />
-          </View>
-        </View>
+        )}
+      </View>
+
+      <View style={styles.bottomBar}>
+        <TouchableOpacity 
+          style={[styles.tabButton, activeTab === 'properties' && styles.activeTab]}
+          onPress={() => setActiveTab('properties')}
+        >
+          <Icon name="home" size={24} color={activeTab === 'properties' ? '#007AFF' : '#666'} />
+          <Text style={[styles.tabText, activeTab === 'properties' && styles.activeTabText]}>Properties</Text>
+        </TouchableOpacity>
+        <TouchableOpacity 
+          style={[styles.tabButton, activeTab === 'alerts' && styles.activeTab]}
+          onPress={() => setActiveTab('alerts')}
+        >
+          <Icon name="bell" size={24} color={activeTab === 'alerts' ? '#007AFF' : '#666'} />
+          <Text style={[styles.tabText, activeTab === 'alerts' && styles.activeTabText]}>Alerts</Text>
+        </TouchableOpacity>
       </View>
 
       <Modal
@@ -672,11 +693,40 @@ const styles = StyleSheet.create({
   },
   contentContainer: {
     flex: 1,
-    flexDirection: 'column',
+  },
+  section: {
+    flex: 1,
+    padding: 10,
   },
   propertiesSection: {
-    flex: 0,
-    minHeight: 200, // Minimum height for properties section
+    flex: 1,
+  },
+  bottomBar: {
+    flexDirection: 'row',
+    backgroundColor: 'white',
+    borderTopWidth: 1,
+    borderTopColor: '#ddd',
+    paddingVertical: 5,
+    paddingHorizontal: 20,
+    justifyContent: 'space-around',
+    height: 50,
+  },
+  tabButton: {
+    alignItems: 'center',
+    padding: 5,
+    justifyContent: 'center',
+  },
+  activeTab: {
+    borderTopWidth: 2,
+    borderTopColor: '#007AFF',
+  },
+  tabText: {
+    marginTop: 2,
+    color: '#666',
+    fontSize: 11,
+  },
+  activeTabText: {
+    color: '#007AFF',
   },
   addPropertyButton: {
     backgroundColor: '#007AFF',
@@ -692,8 +742,8 @@ const styles = StyleSheet.create({
   },
   propertyCard: {
     backgroundColor: 'white',
-    margin: 10,
-    padding: 15,
+    margin: 5,
+    padding: 10,
     borderRadius: 10,
     shadowColor: '#000',
     shadowOffset: {
@@ -824,11 +874,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontWeight: 'bold',
   },
-  alertsSection: {
-    flex: 1,
-    marginTop: 20,
-    padding: 15,
-  },
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -863,13 +908,13 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   leadsList: {
-    padding: 10,
+    padding: 5,
   },
   leadCard: {
     backgroundColor: '#f8f8f8',
-    padding: 15,
+    padding: 10,
     borderRadius: 8,
-    marginBottom: 10,
+    marginBottom: 5,
   },
   leadHeader: {
     flexDirection: 'row',
@@ -954,6 +999,25 @@ const styles = StyleSheet.create({
     borderColor: '#ddd',
     borderRadius: 5,
     height: 50,
+  },
+  fab: {
+    position: 'absolute',
+    right: 20,
+    bottom: 20,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#007AFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
   },
 });
 
