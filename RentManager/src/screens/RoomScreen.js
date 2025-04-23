@@ -24,24 +24,23 @@ const RoomScreen = ({ route }) => {
 
   const [modalVisible, setModalVisible] = useState(false);
   const [editingRoom, setEditingRoom] = useState(null);
-  const [roomNumber, setRoomNumber] = useState('');
-  const [roomType, setRoomType] = useState('');
   const [tenant, setTenant] = useState('');
+  const [roomType, setRoomType] = useState('');
   const [status, setStatus] = useState('Vacant');
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [occupiedUntil, setOccupiedUntil] = useState(new Date());
 
   const handleAddRoom = () => {
-    if (!roomNumber || !roomType) {
+    if (!tenant || !roomType) {
       Alert.alert('Error', 'Please fill in all required fields');
       return;
     }
 
     const roomData = {
       propertyId,
-      number: roomNumber,
+      number: tenant, // Using tenant name as room number
       type: roomType,
-      tenant: tenant || null,
+      tenant: tenant,
       status: status,
       occupiedUntil: status === 'Occupied' ? occupiedUntil.toISOString() : null,
     };
@@ -64,9 +63,8 @@ const RoomScreen = ({ route }) => {
 
   const handleEditRoom = (room) => {
     setEditingRoom(room);
-    setRoomNumber(room.number);
-    setRoomType(room.type);
     setTenant(room.tenant || '');
+    setRoomType(room.type);
     setStatus(room.status);
     setOccupiedUntil(room.occupiedUntil ? new Date(room.occupiedUntil) : new Date());
     setModalVisible(true);
@@ -89,9 +87,8 @@ const RoomScreen = ({ route }) => {
 
   const resetForm = () => {
     setEditingRoom(null);
-    setRoomNumber('');
-    setRoomType('');
     setTenant('');
+    setRoomType('');
     setStatus('Vacant');
     setOccupiedUntil(new Date());
   };
@@ -99,7 +96,7 @@ const RoomScreen = ({ route }) => {
   const renderRoom = ({ item }) => (
     <View style={styles.roomCard}>
       <View style={styles.roomHeader}>
-        <Text style={styles.roomNumber}>Room {item.number}</Text>
+        <Text style={styles.roomNumber}>{item.tenant || 'Vacant'}</Text>
         <View style={styles.roomActions}>
           <TouchableOpacity onPress={() => handleEditRoom(item)}>
             <Icon name="pencil" size={24} color="#007AFF" />
@@ -111,7 +108,6 @@ const RoomScreen = ({ route }) => {
       </View>
       <Text style={styles.roomType}>Type: {item.type}</Text>
       <Text style={styles.roomStatus}>Status: {item.status}</Text>
-      {item.tenant && <Text style={styles.tenant}>Tenant: {item.tenant}</Text>}
       {item.occupiedUntil && (
         <Text style={styles.occupiedUntil}>
           Until: {new Date(item.occupiedUntil).toLocaleDateString()}
@@ -153,10 +149,9 @@ const RoomScreen = ({ route }) => {
 
             <TextInput
               style={styles.input}
-              placeholder="Room Number"
-              value={roomNumber}
-              onChangeText={setRoomNumber}
-              keyboardType="numeric"
+              placeholder="Tenant Name"
+              value={tenant}
+              onChangeText={setTenant}
             />
 
             <Picker
@@ -169,13 +164,6 @@ const RoomScreen = ({ route }) => {
               <Picker.Item label="Shared bath" value="Shared bath" />
               <Picker.Item label="Garage" value="Garage" />
             </Picker>
-
-            <TextInput
-              style={styles.input}
-              placeholder="Tenant Name (optional)"
-              value={tenant}
-              onChangeText={setTenant}
-            />
 
             <Picker
               selectedValue={status}
@@ -288,10 +276,6 @@ const styles = StyleSheet.create({
     marginBottom: 5,
   },
   roomStatus: {
-    fontSize: 16,
-    marginBottom: 5,
-  },
-  tenant: {
     fontSize: 16,
     marginBottom: 5,
   },

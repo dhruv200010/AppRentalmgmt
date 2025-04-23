@@ -54,7 +54,7 @@ const DashboardScreen = ({ navigation }) => {
   };
 
   const getRoomStatusColor = (room) => {
-    if (room.status === 'Vacant') return '#34C759'; // Green for vacant
+    if (room.status === 'Vacant') return '#8A2BE2'; // Violet for vacant
     
     const remainingDays = getRemainingDays(room.occupiedUntil);
     if (remainingDays <= 15) return '#FF3B30'; // Red for less than 15 days
@@ -75,24 +75,62 @@ const DashboardScreen = ({ navigation }) => {
     return days > 0 ? `${months}m ${days}d left` : `${months} months left`;
   };
 
+  const getRoomSortOrder = (room) => {
+    if (room.status === 'Vacant') return 0; // Vacant rooms first
+    
+    const remainingDays = getRemainingDays(room.occupiedUntil);
+    if (remainingDays <= 15) return 1; // Red (urgent) rooms second
+    if (remainingDays <= 30) return 2; // Orange rooms third
+    return 3; // Green rooms last
+  };
+
   const renderRoomStatus = (room) => {
     const statusColor = getRoomStatusColor(room);
     const remainingTime = getRemainingTimeText(room);
+    const isVacant = room.status === 'Vacant';
     
     return (
-      <View key={room.id} style={[styles.roomStatus, { borderLeftColor: statusColor, borderLeftWidth: 4 }]}>
-        <Text style={styles.roomTypeLabel}>
-          {room.type === 'Private bath' ? 'P' : room.type === 'Shared bath' ? 'S' : 'G'}
-        </Text>
-        <Text style={styles.roomNumber}>Room {room.number}</Text>
-        {room.tenant && (
-          <Text style={styles.tenantName} numberOfLines={1}>
-            {room.tenant}
+      <View 
+        key={room.id} 
+        style={[
+          styles.roomStatus, 
+          { 
+            borderLeftColor: statusColor, 
+            borderLeftWidth: 4,
+            backgroundColor: isVacant ? '#f8f8f8' : 'white',
+          }
+        ]}
+      >
+        <View style={[
+          styles.roomContent,
+          isVacant && styles.vacantRoomContent
+        ]}>
+          <Text style={styles.roomTypeLabel}>
+            {room.type === 'Private bath' ? 'P' : room.type === 'Shared bath' ? 'S' : 'G'}
           </Text>
+          <Text style={styles.roomNumber}>{room.tenant || 'Vacant'}</Text>
+          <Text style={[styles.duration, { color: statusColor }]}>
+            {remainingTime}
+          </Text>
+        </View>
+        {isVacant && (
+          <View style={styles.stripedBackground}>
+            {[...Array(20)].map((_, i) => (
+              <View
+                key={i}
+                style={[
+                  styles.stripe,
+                  { 
+                    top: i * 10,
+                    transform: [{ rotate: '45deg' }],
+                    width: '200%',
+                    left: '-50%'
+                  }
+                ]}
+              />
+            ))}
+          </View>
         )}
-        <Text style={[styles.duration, { color: statusColor }]}>
-          {remainingTime}
-        </Text>
       </View>
     );
   };
@@ -121,7 +159,9 @@ const DashboardScreen = ({ navigation }) => {
       </View>
       <ScrollView horizontal showsHorizontalScrollIndicator={false}>
         <View style={styles.roomsContainer}>
-          {property.rooms.map(renderRoomStatus)}
+          {[...property.rooms]
+            .sort((a, b) => getRoomSortOrder(a) - getRoomSortOrder(b))
+            .map(renderRoomStatus)}
         </View>
       </ScrollView>
     </View>
@@ -244,10 +284,36 @@ const styles = StyleSheet.create({
   },
   roomStatus: {
     padding: 10,
-    backgroundColor: '#f8f8f8',
     borderRadius: 8,
     minWidth: 100,
     borderLeftWidth: 4,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  roomContent: {
+    position: 'relative',
+    zIndex: 1,
+  },
+  vacantRoomContent: {
+    backgroundColor: 'white',
+    padding: 5,
+    borderRadius: 4,
+  },
+  stripedBackground: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 0,
+    overflow: 'hidden',
+  },
+  stripe: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    height: 2,
+    backgroundColor: '#e0e0e0',
   },
   roomTypeLabel: {
     fontSize: 16,
@@ -257,11 +323,6 @@ const styles = StyleSheet.create({
   roomNumber: {
     fontSize: 14,
     fontWeight: '500',
-  },
-  tenantName: {
-    fontSize: 12,
-    color: '#666',
-    marginTop: 5,
   },
   duration: {
     fontSize: 12,
