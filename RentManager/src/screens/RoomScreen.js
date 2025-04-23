@@ -1,113 +1,237 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
+import React, { useState } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  FlatList,
+  Modal,
+  TextInput,
+  Alert,
+} from 'react-native';
+import { useSelector, useDispatch } from 'react-redux';
 import { Picker } from '@react-native-picker/picker';
-import { useDispatch, useSelector } from 'react-redux';
-import { useNavigation, useRoute } from '@react-navigation/native';
-import { addRoom, updateRoom } from '../store/slices/roomSlice';
+import DateTimePicker from '@react-native-community/datetimepicker';
+import { addRoom, updateRoom, deleteRoom } from '../store/slices/propertySlice';
+import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 
-const RoomScreen = () => {
-  const navigation = useNavigation();
-  const route = useRoute();
+const RoomScreen = ({ route }) => {
+  const { propertyId } = route.params;
   const dispatch = useDispatch();
-  const rooms = useSelector((state) => state.rooms.rooms);
-  const properties = useSelector((state) => state.properties.properties);
+  const property = useSelector((state) =>
+    state.properties.properties.find((p) => p.id === propertyId)
+  );
 
-  const [room, setRoom] = useState({
-    id: '',
-    propertyId: '',
-    name: '',
-    type: 'Private bath',
-    status: 'vacant',
-    occupiedUntil: '',
-    rent: '',
-  });
+  const [modalVisible, setModalVisible] = useState(false);
+  const [editingRoom, setEditingRoom] = useState(null);
+  const [roomNumber, setRoomNumber] = useState('');
+  const [roomType, setRoomType] = useState('');
+  const [tenant, setTenant] = useState('');
+  const [status, setStatus] = useState('Vacant');
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [occupiedUntil, setOccupiedUntil] = useState(new Date());
 
-  useEffect(() => {
-    if (route.params?.roomId) {
-      const existingRoom = rooms.find(r => r.id === route.params.roomId);
-      if (existingRoom) {
-        setRoom(existingRoom);
-      }
-    } else if (route.params?.propertyId) {
-      setRoom(prev => ({ ...prev, propertyId: route.params.propertyId }));
+  const handleAddRoom = () => {
+    if (!roomNumber || !roomType) {
+      Alert.alert('Error', 'Please fill in all required fields');
+      return;
     }
-  }, [route.params?.roomId, route.params?.propertyId, rooms]);
 
-  const handleSave = () => {
-    if (room.id) {
-      dispatch(updateRoom(room));
+    const roomData = {
+      propertyId,
+      number: roomNumber,
+      type: roomType,
+      tenant: tenant || null,
+      status: status,
+      occupiedUntil: status === 'Occupied' ? occupiedUntil.toISOString() : null,
+    };
+
+    if (editingRoom) {
+      dispatch(
+        updateRoom({
+          propertyId,
+          roomId: editingRoom.id,
+          updates: roomData,
+        })
+      );
     } else {
-      const newRoom = {
-        ...room,
-        id: Date.now().toString(),
-      };
-      dispatch(addRoom(newRoom));
+      dispatch(addRoom(roomData));
     }
-    navigation.goBack();
+
+    setModalVisible(false);
+    resetForm();
   };
 
+  const handleEditRoom = (room) => {
+    setEditingRoom(room);
+    setRoomNumber(room.number);
+    setRoomType(room.type);
+    setTenant(room.tenant || '');
+    setStatus(room.status);
+    setOccupiedUntil(room.occupiedUntil ? new Date(room.occupiedUntil) : new Date());
+    setModalVisible(true);
+  };
+
+  const handleDeleteRoom = (roomId) => {
+    Alert.alert(
+      'Delete Room',
+      'Are you sure you want to delete this room?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => dispatch(deleteRoom({ propertyId, roomId })),
+        },
+      ]
+    );
+  };
+
+  const resetForm = () => {
+    setEditingRoom(null);
+    setRoomNumber('');
+    setRoomType('');
+    setTenant('');
+    setStatus('Vacant');
+    setOccupiedUntil(new Date());
+  };
+
+  const renderRoom = ({ item }) => (
+    <View style={styles.roomCard}>
+      <View style={styles.roomHeader}>
+        <Text style={styles.roomNumber}>Room {item.number}</Text>
+        <View style={styles.roomActions}>
+          <TouchableOpacity onPress={() => handleEditRoom(item)}>
+            <Icon name="pencil" size={24} color="#007AFF" />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => handleDeleteRoom(item.id)}>
+            <Icon name="delete" size={24} color="#FF3B30" />
+          </TouchableOpacity>
+        </View>
+      </View>
+      <Text style={styles.roomType}>Type: {item.type}</Text>
+      <Text style={styles.roomStatus}>Status: {item.status}</Text>
+      {item.tenant && <Text style={styles.tenant}>Tenant: {item.tenant}</Text>}
+      {item.occupiedUntil && (
+        <Text style={styles.occupiedUntil}>
+          Until: {new Date(item.occupiedUntil).toLocaleDateString()}
+        </Text>
+      )}
+    </View>
+  );
+
   return (
-    <ScrollView style={styles.container}>
-      <View style={styles.form}>
-        <Text style={styles.label}>Room Name</Text>
-        <TextInput
-          style={styles.input}
-          value={room.name}
-          onChangeText={(text) => setRoom({ ...room, name: text })}
-          placeholder="Enter room name"
-        />
+    <View style={styles.container}>
+      <TouchableOpacity
+        style={styles.addButton}
+        onPress={() => {
+          resetForm();
+          setModalVisible(true);
+        }}
+      >
+        <Text style={styles.addButtonText}>Add Room</Text>
+      </TouchableOpacity>
 
-        <Text style={styles.label}>Room Type</Text>
-        <View style={styles.pickerContainer}>
-          <Picker
-            selectedValue={room.type}
-            onValueChange={(value) => setRoom({ ...room, type: value })}
-            style={styles.picker}
-          >
-            <Picker.Item label="Private bath" value="Private bath" />
-            <Picker.Item label="Shared bath" value="Shared bath" />
-            <Picker.Item label="Garage" value="Garage" />
-          </Picker>
-        </View>
+      <FlatList
+        data={property?.rooms || []}
+        renderItem={renderRoom}
+        keyExtractor={(item) => item.id}
+        contentContainerStyle={styles.listContainer}
+      />
 
-        <Text style={styles.label}>Status</Text>
-        <View style={styles.pickerContainer}>
-          <Picker
-            selectedValue={room.status}
-            onValueChange={(value) => setRoom({ ...room, status: value })}
-            style={styles.picker}
-          >
-            <Picker.Item label="Vacant" value="vacant" />
-            <Picker.Item label="Occupied" value="occupied" />
-          </Picker>
-        </View>
+      <Modal
+        visible={modalVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setModalVisible(false)}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>
+              {editingRoom ? 'Edit Room' : 'Add Room'}
+            </Text>
 
-        {room.status === 'occupied' && (
-          <>
-            <Text style={styles.label}>Occupied Until</Text>
             <TextInput
               style={styles.input}
-              value={room.occupiedUntil}
-              onChangeText={(text) => setRoom({ ...room, occupiedUntil: text })}
-              placeholder="Enter date (YYYY-MM-DD)"
+              placeholder="Room Number"
+              value={roomNumber}
+              onChangeText={setRoomNumber}
+              keyboardType="numeric"
             />
-          </>
-        )}
 
-        <Text style={styles.label}>Rent</Text>
-        <TextInput
-          style={styles.input}
-          value={room.rent}
-          onChangeText={(text) => setRoom({ ...room, rent: text })}
-          placeholder="Enter rent amount"
-          keyboardType="numeric"
-        />
+            <Picker
+              selectedValue={roomType}
+              onValueChange={setRoomType}
+              style={styles.picker}
+            >
+              <Picker.Item label="Select Room Type" value="" />
+              <Picker.Item label="Private bath" value="Private bath" />
+              <Picker.Item label="Shared bath" value="Shared bath" />
+              <Picker.Item label="Garage" value="Garage" />
+            </Picker>
 
-        <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
-          <Text style={styles.saveButtonText}>Save Room</Text>
-        </TouchableOpacity>
-      </View>
-    </ScrollView>
+            <TextInput
+              style={styles.input}
+              placeholder="Tenant Name (optional)"
+              value={tenant}
+              onChangeText={setTenant}
+            />
+
+            <Picker
+              selectedValue={status}
+              onValueChange={setStatus}
+              style={styles.picker}
+            >
+              <Picker.Item label="Vacant" value="Vacant" />
+              <Picker.Item label="Occupied" value="Occupied" />
+            </Picker>
+
+            {status === 'Occupied' && (
+              <TouchableOpacity
+                style={styles.dateButton}
+                onPress={() => setShowDatePicker(true)}
+              >
+                <Text style={styles.dateButtonText}>
+                  Occupied Until: {occupiedUntil.toLocaleDateString()}
+                </Text>
+              </TouchableOpacity>
+            )}
+
+            {showDatePicker && (
+              <DateTimePicker
+                value={occupiedUntil}
+                mode="date"
+                display="default"
+                onChange={(event, date) => {
+                  setShowDatePicker(false);
+                  if (date) {
+                    setOccupiedUntil(date);
+                  }
+                }}
+              />
+            )}
+
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.button, styles.cancelButton]}
+                onPress={() => {
+                  setModalVisible(false);
+                  resetForm();
+                }}
+              >
+                <Text style={styles.buttonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.button, styles.saveButton]}
+                onPress={handleAddRoom}
+              >
+                <Text style={styles.buttonText}>Save</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    </View>
   );
 };
 
@@ -115,46 +239,125 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f5f5f5',
+    padding: 15,
   },
-  form: {
-    padding: 16,
+  addButton: {
+    backgroundColor: '#007AFF',
+    padding: 15,
+    borderRadius: 10,
+    marginBottom: 15,
   },
-  label: {
+  addButtonText: {
+    color: 'white',
+    textAlign: 'center',
     fontSize: 16,
     fontWeight: 'bold',
-    marginBottom: 8,
-    color: '#333',
+  },
+  listContainer: {
+    gap: 15,
+  },
+  roomCard: {
+    backgroundColor: 'white',
+    padding: 15,
+    borderRadius: 10,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  roomHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  roomNumber: {
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  roomActions: {
+    flexDirection: 'row',
+    gap: 15,
+  },
+  roomType: {
+    fontSize: 16,
+    marginBottom: 5,
+  },
+  roomStatus: {
+    fontSize: 16,
+    marginBottom: 5,
+  },
+  tenant: {
+    fontSize: 16,
+    marginBottom: 5,
+  },
+  occupiedUntil: {
+    fontSize: 14,
+    color: '#666',
+  },
+  modalContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  modalContent: {
+    backgroundColor: 'white',
+    padding: 20,
+    borderRadius: 10,
+    width: '90%',
+    maxWidth: 400,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginBottom: 20,
+    textAlign: 'center',
   },
   input: {
-    backgroundColor: '#fff',
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 16,
     borderWidth: 1,
     borderColor: '#ddd',
-  },
-  pickerContainer: {
-    backgroundColor: '#fff',
-    borderRadius: 8,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: '#ddd',
-    overflow: 'hidden',
+    padding: 10,
+    borderRadius: 5,
+    marginBottom: 15,
   },
   picker: {
-    height: 50,
-    width: '100%',
+    borderWidth: 1,
+    borderColor: '#ddd',
+    marginBottom: 15,
+  },
+  dateButton: {
+    backgroundColor: '#f0f0f0',
+    padding: 10,
+    borderRadius: 5,
+    marginBottom: 15,
+  },
+  dateButtonText: {
+    textAlign: 'center',
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  button: {
+    flex: 1,
+    padding: 15,
+    borderRadius: 5,
+  },
+  cancelButton: {
+    backgroundColor: '#FF3B30',
   },
   saveButton: {
     backgroundColor: '#007AFF',
-    padding: 16,
-    borderRadius: 8,
-    alignItems: 'center',
-    marginTop: 16,
   },
-  saveButtonText: {
-    color: '#fff',
-    fontSize: 16,
+  buttonText: {
+    color: 'white',
+    textAlign: 'center',
     fontWeight: 'bold',
   },
 });

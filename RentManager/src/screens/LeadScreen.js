@@ -1,102 +1,204 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
+import React, { useState } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  FlatList,
+  Modal,
+  TextInput,
+  Alert,
+} from 'react-native';
+import { useSelector, useDispatch } from 'react-redux';
 import { Picker } from '@react-native-picker/picker';
-import { useDispatch, useSelector } from 'react-redux';
-import { useNavigation, useRoute } from '@react-navigation/native';
-import { addLead, updateLead } from '../store/slices/leadSlice';
+import { addLead, updateLead, deleteLead } from '../store/slices/propertySlice';
+import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 
-const LeadScreen = () => {
-  const navigation = useNavigation();
-  const route = useRoute();
+const LEAD_SOURCES = [
+  'Roomies',
+  'Facebook',
+  'Roomster',
+  'Telegram',
+  'Sulekha',
+  'WhatsApp',
+  'Others',
+];
+
+const LeadScreen = ({ route }) => {
+  const { propertyId } = route.params;
   const dispatch = useDispatch();
-  const leads = useSelector((state) => state.leads.leads);
-  const properties = useSelector((state) => state.properties.properties);
+  const property = useSelector((state) =>
+    state.properties.properties.find((p) => p.id === propertyId)
+  );
 
-  const [lead, setLead] = useState({
-    id: '',
-    propertyId: '',
-    name: '',
-    contactNo: '',
-    source: 'roomies',
-    notes: '',
-  });
+  const [modalVisible, setModalVisible] = useState(false);
+  const [editingLead, setEditingLead] = useState(null);
+  const [name, setName] = useState('');
+  const [contact, setContact] = useState('');
+  const [source, setSource] = useState('');
 
-  useEffect(() => {
-    if (route.params?.leadId) {
-      const existingLead = leads.find(l => l.id === route.params.leadId);
-      if (existingLead) {
-        setLead(existingLead);
-      }
-    } else if (route.params?.propertyId) {
-      setLead(prev => ({ ...prev, propertyId: route.params.propertyId }));
+  const handleAddLead = () => {
+    if (!name || !contact || !source) {
+      Alert.alert('Error', 'Please fill in all fields');
+      return;
     }
-  }, [route.params?.leadId, route.params?.propertyId, leads]);
 
-  const handleSave = () => {
-    if (lead.id) {
-      dispatch(updateLead(lead));
+    const leadData = {
+      name,
+      contact,
+      source,
+    };
+
+    if (editingLead) {
+      dispatch(
+        updateLead({
+          propertyId,
+          leadId: editingLead.id,
+          leadData,
+        })
+      );
     } else {
-      const newLead = {
-        ...lead,
-        id: Date.now().toString(),
-      };
-      dispatch(addLead(newLead));
+      dispatch(
+        addLead({
+          propertyId,
+          ...leadData,
+        })
+      );
     }
-    navigation.goBack();
+
+    setModalVisible(false);
+    resetForm();
   };
 
-  return (
-    <ScrollView style={styles.container}>
-      <View style={styles.form}>
-        <Text style={styles.label}>Lead Name</Text>
-        <TextInput
-          style={styles.input}
-          value={lead.name}
-          onChangeText={(text) => setLead({ ...lead, name: text })}
-          placeholder="Enter lead name"
-        />
+  const handleEditLead = (lead) => {
+    setEditingLead(lead);
+    setName(lead.name);
+    setContact(lead.contact);
+    setSource(lead.source);
+    setModalVisible(true);
+  };
 
-        <Text style={styles.label}>Contact Number</Text>
-        <TextInput
-          style={styles.input}
-          value={lead.contactNo}
-          onChangeText={(text) => setLead({ ...lead, contactNo: text })}
-          placeholder="Enter contact number"
-          keyboardType="phone-pad"
-        />
+  const handleDeleteLead = (leadId) => {
+    Alert.alert(
+      'Delete Lead',
+      'Are you sure you want to delete this lead?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => dispatch(deleteLead({ propertyId, leadId })),
+        },
+      ]
+    );
+  };
 
-        <Text style={styles.label}>Source</Text>
-        <View style={styles.pickerContainer}>
-          <Picker
-            selectedValue={lead.source}
-            onValueChange={(value) => setLead({ ...lead, source: value })}
-            style={styles.picker}
-          >
-            <Picker.Item label="Roomies" value="roomies" />
-            <Picker.Item label="Facebook" value="fb" />
-            <Picker.Item label="Roomster" value="roomster" />
-            <Picker.Item label="Telegram" value="telegram" />
-            <Picker.Item label="Sulekha" value="sulekha" />
-            <Picker.Item label="WhatsApp" value="whatsapp" />
-            <Picker.Item label="Others" value="others" />
-          </Picker>
+  const resetForm = () => {
+    setEditingLead(null);
+    setName('');
+    setContact('');
+    setSource('');
+  };
+
+  const renderLead = ({ item }) => (
+    <View style={styles.leadCard}>
+      <View style={styles.leadHeader}>
+        <Text style={styles.leadName}>{item.name}</Text>
+        <View style={styles.leadActions}>
+          <TouchableOpacity onPress={() => handleEditLead(item)}>
+            <Icon name="pencil" size={24} color="#007AFF" />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => handleDeleteLead(item.id)}>
+            <Icon name="delete" size={24} color="#FF3B30" />
+          </TouchableOpacity>
         </View>
-
-        <Text style={styles.label}>Notes</Text>
-        <TextInput
-          style={[styles.input, styles.textArea]}
-          value={lead.notes}
-          onChangeText={(text) => setLead({ ...lead, notes: text })}
-          placeholder="Enter any additional notes"
-          multiline
-          numberOfLines={4}
-        />
-
-        <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
-          <Text style={styles.saveButtonText}>Save Lead</Text>
-        </TouchableOpacity>
       </View>
-    </ScrollView>
+      <Text style={styles.leadContact}>Contact: {item.contact}</Text>
+      <Text style={styles.leadSource}>Source: {item.source}</Text>
+      <Text style={styles.leadDate}>
+        Added: {new Date(item.createdAt).toLocaleDateString()}
+      </Text>
+    </View>
+  );
+
+  return (
+    <View style={styles.container}>
+      <TouchableOpacity
+        style={styles.addButton}
+        onPress={() => {
+          resetForm();
+          setModalVisible(true);
+        }}
+      >
+        <Text style={styles.addButtonText}>Add Lead</Text>
+      </TouchableOpacity>
+
+      <FlatList
+        data={property?.leads || []}
+        renderItem={renderLead}
+        keyExtractor={(item) => item.id}
+        contentContainerStyle={styles.listContainer}
+      />
+
+      <Modal
+        visible={modalVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setModalVisible(false)}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>
+              {editingLead ? 'Edit Lead' : 'Add Lead'}
+            </Text>
+
+            <TextInput
+              style={styles.input}
+              placeholder="Name"
+              value={name}
+              onChangeText={setName}
+            />
+
+            <TextInput
+              style={styles.input}
+              placeholder="Contact Number"
+              value={contact}
+              onChangeText={setContact}
+              keyboardType="phone-pad"
+            />
+
+            <Picker
+              selectedValue={source}
+              onValueChange={setSource}
+              style={styles.picker}
+            >
+              <Picker.Item label="Select Source" value="" />
+              {LEAD_SOURCES.map((src) => (
+                <Picker.Item key={src} label={src} value={src} />
+              ))}
+            </Picker>
+
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.button, styles.cancelButton]}
+                onPress={() => {
+                  setModalVisible(false);
+                  resetForm();
+                }}
+              >
+                <Text style={styles.buttonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.button, styles.saveButton]}
+                onPress={handleAddLead}
+              >
+                <Text style={styles.buttonText}>Save</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    </View>
   );
 };
 
@@ -104,50 +206,112 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f5f5f5',
+    padding: 15,
   },
-  form: {
-    padding: 16,
+  addButton: {
+    backgroundColor: '#007AFF',
+    padding: 15,
+    borderRadius: 10,
+    marginBottom: 15,
   },
-  label: {
+  addButtonText: {
+    color: 'white',
+    textAlign: 'center',
     fontSize: 16,
     fontWeight: 'bold',
-    marginBottom: 8,
-    color: '#333',
+  },
+  listContainer: {
+    gap: 15,
+  },
+  leadCard: {
+    backgroundColor: 'white',
+    padding: 15,
+    borderRadius: 10,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  leadHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  leadName: {
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  leadActions: {
+    flexDirection: 'row',
+    gap: 15,
+  },
+  leadContact: {
+    fontSize: 16,
+    marginBottom: 5,
+  },
+  leadSource: {
+    fontSize: 16,
+    marginBottom: 5,
+  },
+  leadDate: {
+    fontSize: 14,
+    color: '#666',
+  },
+  modalContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  modalContent: {
+    backgroundColor: 'white',
+    padding: 20,
+    borderRadius: 10,
+    width: '90%',
+    maxWidth: 400,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginBottom: 20,
+    textAlign: 'center',
   },
   input: {
-    backgroundColor: '#fff',
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 16,
     borderWidth: 1,
     borderColor: '#ddd',
-  },
-  textArea: {
-    height: 100,
-    textAlignVertical: 'top',
-  },
-  pickerContainer: {
-    backgroundColor: '#fff',
-    borderRadius: 8,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: '#ddd',
-    overflow: 'hidden',
+    padding: 10,
+    borderRadius: 5,
+    marginBottom: 15,
   },
   picker: {
-    height: 50,
-    width: '100%',
+    borderWidth: 1,
+    borderColor: '#ddd',
+    marginBottom: 15,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  button: {
+    flex: 1,
+    padding: 15,
+    borderRadius: 5,
+  },
+  cancelButton: {
+    backgroundColor: '#FF3B30',
   },
   saveButton: {
     backgroundColor: '#007AFF',
-    padding: 16,
-    borderRadius: 8,
-    alignItems: 'center',
-    marginTop: 16,
   },
-  saveButtonText: {
-    color: '#fff',
-    fontSize: 16,
+  buttonText: {
+    color: 'white',
+    textAlign: 'center',
     fontWeight: 'bold',
   },
 });

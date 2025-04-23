@@ -2,45 +2,116 @@ import { createSlice } from '@reduxjs/toolkit';
 
 const initialState = {
   properties: [],
-  loading: false,
-  error: null,
+  nextPropertyId: 1,
 };
 
 const propertySlice = createSlice({
   name: 'properties',
   initialState,
   reducers: {
-    setProperties: (state, action) => {
-      state.properties = action.payload;
-    },
     addProperty: (state, action) => {
-      state.properties.push(action.payload);
+      const newProperty = {
+        id: state.nextPropertyId,
+        name: action.payload.name,
+        rooms: [],
+        leads: [],
+      };
+      state.properties.push(newProperty);
+      state.nextPropertyId += 1;
     },
     updateProperty: (state, action) => {
       const index = state.properties.findIndex(p => p.id === action.payload.id);
       if (index !== -1) {
-        state.properties[index] = action.payload;
+        state.properties[index] = {
+          ...state.properties[index],
+          ...action.payload,
+        };
       }
     },
     deleteProperty: (state, action) => {
-      state.properties = state.properties.filter(p => p.id !== action.payload);
+      state.properties = state.properties.filter(
+        (property) => property.id !== action.payload
+      );
     },
-    setLoading: (state, action) => {
-      state.loading = action.payload;
+    addRoom: (state, action) => {
+      const { propertyId, ...roomData } = action.payload;
+      const property = state.properties.find((p) => p.id === propertyId);
+      if (property) {
+        const newRoom = {
+          ...roomData,
+          id: (property.rooms.length + 1).toString(),
+          status: roomData.status || 'Vacant',
+          tenant: roomData.tenant || null,
+          occupiedUntil: roomData.occupiedUntil || null,
+        };
+        property.rooms.push(newRoom);
+      }
     },
-    setError: (state, action) => {
-      state.error = action.payload;
+    updateRoom: (state, action) => {
+      const { propertyId, roomId, updates } = action.payload;
+      const property = state.properties.find((p) => p.id === propertyId);
+      if (property) {
+        const roomIndex = property.rooms.findIndex((r) => r.id === roomId);
+        if (roomIndex !== -1) {
+          property.rooms[roomIndex] = {
+            ...property.rooms[roomIndex],
+            ...updates,
+          };
+        }
+      }
+    },
+    deleteRoom: (state, action) => {
+      const { propertyId, roomId } = action.payload;
+      const property = state.properties.find((p) => p.id === propertyId);
+      if (property) {
+        property.rooms = property.rooms.filter((room) => room.id !== roomId);
+      }
+    },
+    addLead: (state, action) => {
+      const { propertyId, ...leadData } = action.payload;
+      const property = state.properties.find((p) => p.id === propertyId);
+      if (property) {
+        const newLead = {
+          ...leadData,
+          id: (property.leads.length + 1).toString(),
+          createdAt: new Date().toISOString(),
+        };
+        property.leads.push(newLead);
+      }
+    },
+    updateLead: (state, action) => {
+      const { propertyId, leadId, updates } = action.payload;
+      const property = state.properties.find((p) => p.id === propertyId);
+      if (property) {
+        const leadIndex = property.leads.findIndex((l) => l.id === leadId);
+        if (leadIndex !== -1) {
+          property.leads[leadIndex] = {
+            ...property.leads[leadIndex],
+            ...updates,
+          };
+        }
+      }
+    },
+    deleteLead: (state, action) => {
+      const { propertyId, leadId } = action.payload;
+      const property = state.properties.find((p) => p.id === propertyId);
+      if (property) {
+        property.leads = property.leads.filter((lead) => lead.id !== leadId);
+      }
     },
   },
 });
 
 export const {
-  setProperties,
   addProperty,
   updateProperty,
   deleteProperty,
-  setLoading,
-  setError,
+  addRoom,
+  updateRoom,
+  deleteRoom,
+  addLead,
+  updateLead,
+  deleteLead,
 } = propertySlice.actions;
 
 export default propertySlice.reducer; 
