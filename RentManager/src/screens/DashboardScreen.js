@@ -10,6 +10,8 @@ import {
   TextInput,
   FlatList,
   Platform,
+  Animated,
+  PanResponder,
 } from 'react-native';
 import { useSelector, useDispatch } from 'react-redux';
 import { deleteProperty, addProperty } from '../store/slices/propertySlice';
@@ -474,36 +476,78 @@ const DashboardScreen = ({ navigation }) => {
     lead.location.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const renderLead = ({ item }) => (
-    <View style={styles.leadCard}>
-      <View style={styles.leadHeader}>
-        <View style={styles.leadInfo}>
-          <Text style={styles.leadName}>{item.name}</Text>
-          <Text style={styles.leadContact}>{item.contactNo}</Text>
-          <Text style={styles.leadDetails}>
-            {item.category} • {item.source} • {item.location}
-          </Text>
-          <Text style={styles.leadAlert}>
-            Alert: {new Date(item.alertTime).toLocaleString([], { 
-              year: 'numeric',
-              month: 'numeric',
-              day: 'numeric',
-              hour: '2-digit',
-              minute: '2-digit'
-            })}
-          </Text>
-        </View>
-        <View style={styles.leadActions}>
-          <TouchableOpacity onPress={() => handleEditLead(item)}>
-            <Icon name="pencil" size={24} color="#007AFF" />
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => handleDeleteLead(item.id)}>
-            <Icon name="delete" size={24} color="#FF3B30" />
-          </TouchableOpacity>
-        </View>
+  const renderLead = ({ item }) => {
+    const swipeX = new Animated.Value(0);
+
+    const panResponder = PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_, gestureState) => {
+        return Math.abs(gestureState.dx) > 10;
+      },
+      onPanResponderMove: (_, gestureState) => {
+        if (gestureState.dx < 0) { // Only allow left swipe
+          swipeX.setValue(gestureState.dx);
+        }
+      },
+      onPanResponderRelease: (_, gestureState) => {
+        if (gestureState.dx < -100) { // Swipe left more than 100 units
+          Animated.timing(swipeX, {
+            toValue: -100,
+            duration: 200,
+            useNativeDriver: true,
+          }).start();
+        } else {
+          Animated.spring(swipeX, {
+            toValue: 0,
+            useNativeDriver: true,
+            friction: 5,
+          }).start();
+        }
+      },
+    });
+
+    return (
+      <View style={styles.leadCardContainer}>
+        <TouchableOpacity 
+          style={styles.swipeDeleteContainer}
+          onPress={() => handleDeleteLead(item.id)}
+        >
+          <Text style={styles.swipeDeleteText}>Delete</Text>
+        </TouchableOpacity>
+        <Animated.View
+          {...panResponder.panHandlers}
+          style={[
+            styles.leadCard,
+            {
+              transform: [{ translateX: swipeX }],
+            },
+          ]}
+        >
+          <View style={styles.leadHeader}>
+            <View style={styles.leadInfo}>
+              <Text style={styles.leadName}>{item.name}</Text>
+              <Text style={styles.leadContact}>{item.contactNo}</Text>
+              <Text style={styles.leadDetails}>
+                {item.category} • {item.source} • {item.location}
+              </Text>
+              <Text style={styles.leadAlert}>
+                Alert: {new Date(item.alertTime).toLocaleString([], { 
+                  year: 'numeric',
+                  month: 'numeric',
+                  day: 'numeric',
+                  hour: '2-digit',
+                  minute: '2-digit'
+                })}
+              </Text>
+            </View>
+            <TouchableOpacity onPress={() => handleEditLead(item)}>
+              <Icon name="pencil" size={24} color="#007AFF" />
+            </TouchableOpacity>
+          </View>
+        </Animated.View>
       </View>
-    </View>
-  );
+    );
+  };
 
   const handleDateChange = (event, selectedDate) => {
     console.log('Date picker event:', event);
@@ -1204,11 +1248,16 @@ const styles = StyleSheet.create({
   leadsList: {
     padding: 5,
   },
+  leadCardContainer: {
+    position: 'relative',
+    marginBottom: 5,
+  },
   leadCard: {
     backgroundColor: '#f8f8f8',
     padding: 10,
     borderRadius: 8,
-    marginBottom: 5,
+    position: 'relative',
+    zIndex: 1,
   },
   leadHeader: {
     flexDirection: 'row',
@@ -1351,6 +1400,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   chatSubmitText: {
+    color: 'white',
+    fontWeight: 'bold',
+  },
+  swipeDeleteContainer: {
+    position: 'absolute',
+    right: 0,
+    top: 0,
+    bottom: 0,
+    width: 100,
+    backgroundColor: '#FF3B30',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 0,
+    borderRadius: 8,
+  },
+  swipeDeleteText: {
     color: 'white',
     fontWeight: 'bold',
   },
