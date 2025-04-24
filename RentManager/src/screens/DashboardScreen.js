@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -63,6 +63,8 @@ const DashboardScreen = ({ navigation }) => {
   const [alertTime, setAlertTime] = useState(new Date());
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState('properties');
+  const [chatMessage, setChatMessage] = useState('');
+  const [showChatBox, setShowChatBox] = useState(false);
 
   const handleAddProperty = () => {
     if (!propertyName.trim()) {
@@ -214,55 +216,98 @@ const DashboardScreen = ({ navigation }) => {
 
   const scheduleNotification = async (lead, leadId) => {
     try {
-      console.log('Starting notification scheduling...');
+      console.log('\n=== Starting notification scheduling ===');
       console.log('Lead data:', lead);
       console.log('Lead ID:', leadId);
 
+      // Debug 1: Check notification permissions
       const { status } = await Notifications.requestPermissionsAsync();
-      console.log('Notification permission status:', status);
+      console.log('Debug 1 - Notification permission status:', status);
       
       if (status !== 'granted') {
+        console.log('Error: Notification permissions not granted');
         Alert.alert('Error', 'Notification permissions not granted');
         return;
       }
 
+      // Debug 2: Check if we need to cancel existing notification
       if (leadId) {
-        console.log('Canceling existing notification for ID:', leadId);
-        await Notifications.cancelScheduledNotificationAsync(leadId);
+        console.log('Debug 2 - Canceling existing notification for ID:', leadId);
+        try {
+          await Notifications.cancelScheduledNotificationAsync(leadId);
+          console.log('Debug 2 - Successfully canceled existing notification');
+        } catch (cancelError) {
+          console.log('Debug 2 - No existing notification to cancel:', cancelError);
+        }
       }
       
+      // Debug 3: Parse and validate the alert time
       const triggerDate = new Date(lead.alertTime);
       const now = new Date();
       
-      console.log('Trigger date:', triggerDate.toLocaleString());
-      console.log('Current time:', now.toLocaleString());
-      console.log('Time difference (ms):', triggerDate.getTime() - now.getTime());
+      console.log('Debug 3 - Alert time string:', lead.alertTime);
+      console.log('Debug 3 - Parsed trigger date:', triggerDate.toLocaleString());
+      console.log('Debug 3 - Current time:', now.toLocaleString());
+      console.log('Debug 3 - Time difference (ms):', triggerDate.getTime() - now.getTime());
       
       // Only schedule if the date is in the future
       if (triggerDate > now) {
+        // Debug 4: Create and validate trigger object
         const trigger = {
           type: 'date',
           date: triggerDate,
+          repeats: false,
+          channelId: Platform.OS === 'android' ? 'default' : null
         };
 
-        console.log('Scheduling notification with trigger:', trigger);
+        console.log('Debug 4 - Trigger object before scheduling:', JSON.stringify(trigger, null, 2));
+        console.log('Debug 4 - Trigger date type:', typeof trigger.date);
+        console.log('Debug 4 - Trigger date instance of Date:', trigger.date instanceof Date);
+        console.log('Debug 4 - Trigger date value:', trigger.date.toISOString());
+        console.log('Debug 4 - Trigger date local time:', trigger.date.toLocaleString());
 
+        // Debug 5: Prepare notification content
+        const notificationContent = {
+          title: `${lead.category} ${lead.name}`,
+          body: `for ${lead.location}`,
+          data: { leadId },
+          sound: true,
+          priority: Notifications.AndroidNotificationPriority.HIGH,
+          channelId: Platform.OS === 'android' ? 'default' : null
+        };
+
+        console.log('Debug 5 - Notification content:', JSON.stringify(notificationContent, null, 2));
+        
+        // Debug 6: Attempt to schedule notification
+        console.log('Debug 6 - Attempting to schedule notification...');
         const identifier = await Notifications.scheduleNotificationAsync({
-          content: {
-            title: `${lead.category} ${lead.name}`,
-            body: `for ${lead.location}`,
-            data: { leadId },
-          },
+          content: notificationContent,
           trigger,
         });
+        console.log('Debug 6 - Notification scheduling result:', {
+          identifier,
+          success: !!identifier
+        });
 
-        console.log('Notification scheduled successfully');
-        console.log('Notification ID:', identifier);
-        console.log('Scheduled for:', triggerDate.toLocaleString());
-
-        // Verify the scheduled notification
+        // Debug 7: Verify the scheduled notification
+        console.log('Debug 7 - Fetching all scheduled notifications...');
         const scheduledNotifications = await Notifications.getAllScheduledNotificationsAsync();
-        console.log('All scheduled notifications:', scheduledNotifications);
+        console.log('Debug 7 - All scheduled notifications:', JSON.stringify(scheduledNotifications, null, 2));
+        
+        // Debug 8: Verify our specific notification
+        const ourNotification = scheduledNotifications.find(n => n.identifier === identifier);
+        if (ourNotification) {
+          console.log('Debug 8 - Found our scheduled notification:', JSON.stringify(ourNotification, null, 2));
+          console.log('Debug 8 - Scheduled time:', new Date(ourNotification.trigger.date).toLocaleString());
+          console.log('Debug 8 - Trigger configuration:', JSON.stringify(ourNotification.trigger, null, 2));
+        } else {
+          console.error('Debug 8 - Could not find our scheduled notification in the list');
+          console.error('Debug 8 - Expected identifier:', identifier);
+          console.error('Debug 8 - Available identifiers:', scheduledNotifications.map(n => n.identifier));
+          throw new Error('Notification was not properly scheduled');
+        }
+        
+        console.log('=== Notification scheduling completed successfully ===\n');
       } else {
         console.log('Error: Selected time is in the past');
         Alert.alert('Error', 'Please select a future date and time for the alert');
@@ -276,6 +321,59 @@ const DashboardScreen = ({ navigation }) => {
       Alert.alert('Error', 'Failed to schedule notification. Please try again.');
     }
   };
+
+  // Add notification listener
+  useEffect(() => {
+    console.log('Setting up notification listeners...');
+
+    // This listener is called when a notification is received while the app is in the foreground
+    const subscription = Notifications.addNotificationReceivedListener(notification => {
+      console.log('\n=== Notification received ===');
+      console.log('Notification object:', JSON.stringify(notification, null, 2));
+      console.log('Notification date:', new Date(notification.date).toLocaleString());
+      console.log('Notification content:', JSON.stringify(notification.request.content, null, 2));
+      console.log('Notification trigger:', JSON.stringify(notification.request.trigger, null, 2));
+      console.log('Trigger date:', notification.request.trigger?.date?.toLocaleString());
+      console.log('Current time when received:', new Date().toLocaleString());
+      console.log('Time difference:', new Date().getTime() - notification.date);
+      console.log('=== End of notification details ===\n');
+    });
+
+    // This listener is called when a user taps on a notification
+    const responseSubscription = Notifications.addNotificationResponseReceivedListener(response => {
+      console.log('\n=== Notification response received ===');
+      console.log('Response object:', JSON.stringify(response, null, 2));
+      console.log('Notification date:', new Date(response.notification.date).toLocaleString());
+      console.log('Action identifier:', response.actionIdentifier);
+      console.log('User text:', response.userText);
+      console.log('=== End of response details ===\n');
+    });
+
+    // Get initial notification
+    Notifications.getLastNotificationResponseAsync().then(response => {
+      if (response) {
+        console.log('Last notification response:', JSON.stringify(response, null, 2));
+      }
+    });
+
+    // List all scheduled notifications on startup
+    Notifications.getAllScheduledNotificationsAsync().then(notifications => {
+      console.log('Initial scheduled notifications:', JSON.stringify(notifications, null, 2));
+      notifications.forEach(notification => {
+        console.log('Scheduled notification:', {
+          id: notification.identifier,
+          trigger: notification.trigger,
+          scheduledTime: notification.trigger?.date?.toLocaleString() || 'N/A'
+        });
+      });
+    });
+
+    return () => {
+      console.log('Cleaning up notification listeners...');
+      subscription.remove();
+      responseSubscription.remove();
+    };
+  }, []);
 
   const handleAddLead = async () => {
     if (!leadName || !contactNo || !source || !category || !location) {
@@ -454,6 +552,143 @@ const DashboardScreen = ({ navigation }) => {
     }
   };
 
+  // Function to parse natural language message
+  const parseMessage = (message) => {
+    console.log('Starting message parsing...');
+    console.log('Original message:', message);
+
+    const tomorrowRegex = /tomorrow|tmrw|tmr/i;
+    const timeRegex = /(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/i;
+    const callRegex = /(?:to\s+)?call\s+([a-zA-Z]+)/i;
+    const todayRegex = /today/i;
+
+    let date = new Date();
+    let name = '';
+    let category = 'Follow up with';
+
+    console.log('Initial date:', date.toLocaleString());
+
+    // Check for tomorrow
+    if (tomorrowRegex.test(message)) {
+      date.setDate(date.getDate() + 1);
+      console.log('Tomorrow detected, new date:', date.toLocaleString());
+    }
+
+    // Extract time
+    const timeMatch = message.match(timeRegex);
+    if (timeMatch) {
+      console.log('Time match found:', timeMatch);
+      let hours = parseInt(timeMatch[1]);
+      const minutes = timeMatch[2] ? parseInt(timeMatch[2]) : 0;
+      const period = timeMatch[3]?.toLowerCase();
+
+      console.log('Parsed time components:', { hours, minutes, period });
+
+      // Convert to 24-hour format
+      if (period === 'pm') {
+        if (hours !== 12) {  // Don't add 12 if it's already 12 PM
+          hours += 12;
+        }
+        console.log('Converted to 24-hour format (PM):', hours);
+      } else if (period === 'am' && hours === 12) {
+        hours = 0;  // 12 AM should be 00:00
+        console.log('Converted to 24-hour format (AM):', hours);
+      }
+
+      // Set the time on the existing date (which already has tomorrow's date if applicable)
+      date.setHours(hours, minutes, 0, 0);
+      console.log('Final target date with time set:', date.toLocaleString());
+    }
+
+    // Extract name
+    const nameMatch = message.match(callRegex);
+    if (nameMatch) {
+      name = nameMatch[1];
+      console.log('Name extracted:', name);
+    }
+
+    console.log('Final parsed data:', {
+      name,
+      date: date.toLocaleString(),
+      category
+    });
+
+    return {
+      name,
+      date,
+      category
+    };
+  };
+
+  const handleChatSubmit = async () => {
+    if (!chatMessage.trim()) return;
+
+    console.log('\n=== Starting chat message processing ===');
+    console.log('Original message:', chatMessage);
+
+    const parsedData = parseMessage(chatMessage);
+    console.log('Parsed data:', {
+      name: parsedData.name,
+      date: parsedData.date.toLocaleString(),
+      category: parsedData.category
+    });
+
+    if (!parsedData.name) {
+      console.log('Error: No name found in message');
+      Alert.alert('Error', 'Could not identify the person to call. Please include a name in your message.');
+      return;
+    }
+
+    // Create a date string that preserves local time
+    const localDate = new Date(parsedData.date);
+    const year = localDate.getFullYear();
+    const month = String(localDate.getMonth() + 1).padStart(2, '0');
+    const day = String(localDate.getDate()).padStart(2, '0');
+    const hours = String(localDate.getHours()).padStart(2, '0');
+    const minutes = String(localDate.getMinutes()).padStart(2, '0');
+    const seconds = String(localDate.getSeconds()).padStart(2, '0');
+    
+    // Create ISO string with local time (no timezone offset)
+    const localDateString = `${year}-${month}-${day}T${hours}:${minutes}:${seconds}`;
+
+    const leadData = {
+      name: parsedData.name,
+      contactNo: '',
+      source: 'chat',
+      category: parsedData.category,
+      location: '',
+      alertTime: localDateString,
+    };
+
+    console.log('Lead data to be created:', leadData);
+    console.log('Alert time in local format:', localDateString);
+
+    try {
+      // Create a temporary ID for the notification
+      const tempId = Date.now().toString();
+      console.log('Temporary ID for notification:', tempId);
+      
+      // Schedule notification first with the temporary ID
+      console.log('Scheduling notification...');
+      await scheduleNotification(leadData, tempId);
+
+      // Then create the lead
+      console.log('Creating lead in Redux store...');
+      dispatch(addLead(leadData));
+
+      setChatMessage('');
+      setShowChatBox(false);
+      console.log('=== Chat message processing completed ===\n');
+    } catch (error) {
+      console.error('Error in handleChatSubmit:', error);
+      console.error('Error details:', {
+        message: error.message,
+        stack: error.stack,
+      });
+      Alert.alert('Error', 'Failed to create alert. Please try again.');
+    }
+  };
+
   return (
     <View style={styles.container}>
       <View style={styles.contentContainer}>
@@ -474,6 +709,25 @@ const DashboardScreen = ({ navigation }) => {
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>Alerts</Text>
             </View>
+
+            {showChatBox && (
+              <View style={styles.chatBox}>
+                <TextInput
+                  style={styles.chatInput}
+                  placeholder="Type your alert message (e.g., 'call Justin tomorrow 8pm')"
+                  value={chatMessage}
+                  onChangeText={setChatMessage}
+                  multiline
+                />
+                <TouchableOpacity
+                  style={styles.chatSubmitButton}
+                  onPress={handleChatSubmit}
+                >
+                  <Text style={styles.chatSubmitText}>Create Alert</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
             <View style={styles.searchContainer}>
               <Icon name="magnify" size={20} color="#666" style={styles.searchIcon} />
               <TextInput
@@ -508,6 +762,12 @@ const DashboardScreen = ({ navigation }) => {
               }}
             >
               <Icon name="plus" size={24} color="white" />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.fab, styles.chatFab]}
+              onPress={() => setShowChatBox(!showChatBox)}
+            >
+              <Icon name={showChatBox ? "close" : "chat"} size={24} color="white" />
             </TouchableOpacity>
           </View>
         )}
@@ -1024,6 +1284,47 @@ const styles = StyleSheet.create({
     },
     shadowOpacity: 0.25,
     shadowRadius: 3.84,
+  },
+  chatButton: {
+    padding: 8,
+    borderRadius: 20,
+    backgroundColor: '#f0f0f0',
+  },
+  chatFab: {
+    bottom: 86,
+    backgroundColor: '#34C759',
+  },
+  chatBox: {
+    backgroundColor: 'white',
+    borderRadius: 10,
+    padding: 10,
+    marginBottom: 10,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  chatInput: {
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 8,
+    padding: 10,
+    minHeight: 60,
+    marginBottom: 10,
+  },
+  chatSubmitButton: {
+    backgroundColor: '#007AFF',
+    padding: 10,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  chatSubmitText: {
+    color: 'white',
+    fontWeight: 'bold',
   },
 });
 
