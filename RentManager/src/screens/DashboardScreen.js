@@ -12,6 +12,7 @@ import {
   Platform,
   Animated,
   PanResponder,
+  Linking,
 } from 'react-native';
 import { useSelector, useDispatch } from 'react-redux';
 import { deleteProperty, addProperty } from '../store/slices/propertySlice';
@@ -506,6 +507,12 @@ const DashboardScreen = ({ navigation }) => {
       },
     });
 
+    const handleCall = () => {
+      if (item.contactNo) {
+        Linking.openURL(`tel:${item.contactNo}`);
+      }
+    };
+
     return (
       <View style={styles.leadCardContainer}>
         <TouchableOpacity 
@@ -523,7 +530,11 @@ const DashboardScreen = ({ navigation }) => {
             },
           ]}
         >
-          <View style={styles.leadHeader}>
+          <TouchableOpacity 
+            style={styles.leadHeader}
+            onPress={() => handleEditLead(item)}
+            activeOpacity={0.7}
+          >
             <View style={styles.leadInfo}>
               <Text style={styles.leadName}>{item.name}</Text>
               <Text style={styles.leadContact}>{item.contactNo}</Text>
@@ -540,10 +551,15 @@ const DashboardScreen = ({ navigation }) => {
                 })}
               </Text>
             </View>
-            <TouchableOpacity onPress={() => handleEditLead(item)}>
-              <Icon name="pencil" size={24} color="#007AFF" />
-            </TouchableOpacity>
-          </View>
+            {item.contactNo && (
+              <TouchableOpacity 
+                style={styles.callButton}
+                onPress={handleCall}
+              >
+                <Icon name="phone" size={24} color="#34C759" />
+              </TouchableOpacity>
+            )}
+          </TouchableOpacity>
         </Animated.View>
       </View>
     );
@@ -601,49 +617,85 @@ const DashboardScreen = ({ navigation }) => {
     console.log('Starting message parsing...');
     console.log('Original message:', message);
 
-    const tomorrowRegex = /tomorrow|tmrw|tmr/i;
-    const timeRegex = /(?:^|\s)(\d{1,2})(?::(\d{2}))?\s*(am|pm)(?:\s|$)/i; // More strict time regex
+    const timeRegex = /(?:^|\s)(\d{1,2})(?::(\d{2}))?\s*(am|pm)(?:\s|$)/i;
     const callRegex = /(?:to\s+)?call\s+([a-zA-Z]+)/i;
     const todayRegex = /today/i;
-    const phoneRegex = /^\+?[0-9]{10,15}$/; // Regex to match phone numbers
+    const phoneRegex = /(?:\+?(\d{1,3}))?[-. (]*(\d{3})[-. )]*(\d{3})[-. ]*(\d{4})(?: *x\d+)?/;
+    const hashtagRegex = /#(\w+)/g;
 
     let date = new Date();
     let name = '';
+    let contactNo = '';
     let category = 'Follow up with';
+    let source = '';
+    let location = '';
+    let timeSpecified = false;
 
     console.log('Initial date:', date.toLocaleString());
 
-    // Check if message is a phone number
+    // Check if message contains a phone number
     const trimmedMessage = message.trim();
-    if (phoneRegex.test(trimmedMessage)) {
-      console.log('Phone number detected, setting default reminder');
+    const phoneMatch = trimmedMessage.match(phoneRegex);
+    
+    if (phoneMatch) {
+      console.log('Phone number detected:', phoneMatch[0]);
+      // Format the phone number by removing non-digit characters
+      contactNo = phoneMatch[0].replace(/\D/g, '');
+      
+      // Extract name and categories from the message
+      let remainingText = trimmedMessage.replace(phoneMatch[0], '').trim();
+      
+      // Check for hashtags that match available categories
+      const hashtagMatches = [...remainingText.matchAll(hashtagRegex)];
+      for (const match of hashtagMatches) {
+        const hashtagValue = match[1].toLowerCase();
+        
+        // Check if the hashtag matches any available source
+        const matchingSource = sources.find(s => s.toLowerCase() === hashtagValue);
+        if (matchingSource) {
+          source = matchingSource;
+          remainingText = remainingText.replace(match[0], '').trim();
+          continue;
+        }
+        
+        // Check if the hashtag matches any available category
+        const matchingCategory = categories.find(c => c.toLowerCase() === hashtagValue);
+        if (matchingCategory) {
+          category = matchingCategory;
+          remainingText = remainingText.replace(match[0], '').trim();
+          continue;
+        }
+        
+        // Check if the hashtag matches any available location
+        const matchingLocation = locations.find(l => l.toLowerCase() === hashtagValue);
+        if (matchingLocation) {
+          location = matchingLocation;
+          remainingText = remainingText.replace(match[0], '').trim();
+          continue;
+        }
+      }
+      
+      // Clean up the remaining text for the name
+      name = remainingText
+        .replace(/\s+/g, ' ') // Replace multiple spaces with single space
+        .trim(); // Remove leading/trailing spaces
+      
+      // If no name remains after cleaning, use the phone number as name
+      if (!name) {
+        name = contactNo;
+      }
+
       date.setDate(date.getDate() + 2);
       date.setHours(10, 0, 0, 0);
       return {
-        name: trimmedMessage,
+        name,
+        contactNo,
         date,
         category,
+        source,
+        location,
         isPhoneNumber: true
       };
-    }
-
-    // Check if message is just pasted text without name or time
-    if (!callRegex.test(message) && !timeRegex.test(message)) {
-      // Set default reminder after two days at 10 AM
-      date.setDate(date.getDate() + 2);
-      date.setHours(10, 0, 0, 0);
-      console.log('Default reminder set for 2 days later at 10 AM:', date.toLocaleString());
-      return {
-        name: trimmedMessage,
-        date,
-        category
-      };
-    }
-
-    // Check for tomorrow
-    if (tomorrowRegex.test(message)) {
-      date.setDate(date.getDate() + 1);
-      console.log('Tomorrow detected, new date:', date.toLocaleString());
     }
 
     // Extract time
@@ -654,22 +706,18 @@ const DashboardScreen = ({ navigation }) => {
       const minutes = timeMatch[2] ? parseInt(timeMatch[2]) : 0;
       const period = timeMatch[3]?.toLowerCase();
 
-      console.log('Parsed time components:', { hours, minutes, period });
-
       // Convert to 24-hour format
       if (period === 'pm') {
-        if (hours !== 12) {  // Don't add 12 if it's already 12 PM
+        if (hours !== 12) {
           hours += 12;
         }
-        console.log('Converted to 24-hour format (PM):', hours);
       } else if (period === 'am' && hours === 12) {
-        hours = 0;  // 12 AM should be 00:00
-        console.log('Converted to 24-hour format (AM):', hours);
+        hours = 0;
       }
 
-      // Set the time on the existing date (which already has tomorrow's date if applicable)
       date.setHours(hours, minutes, 0, 0);
-      console.log('Final target date with time set:', date.toLocaleString());
+      timeSpecified = true;
+      console.log('Time specified, final date:', date.toLocaleString());
     }
 
     // Extract name
@@ -679,16 +727,29 @@ const DashboardScreen = ({ navigation }) => {
       console.log('Name extracted:', name);
     }
 
+    // If no time was specified, set default to 10 AM two days from now
+    if (!timeSpecified) {
+      date.setDate(date.getDate() + 2);
+      date.setHours(10, 0, 0, 0);
+      console.log('No time specified, setting default reminder for 2 days later at 10 AM:', date.toLocaleString());
+    }
+
     console.log('Final parsed data:', {
-      name,
+      name: name || trimmedMessage,
+      contactNo,
       date: date.toLocaleString(),
-      category
+      category,
+      source,
+      location
     });
 
     return {
       name: name || trimmedMessage,
+      contactNo,
       date,
-      category
+      category,
+      source,
+      location
     };
   };
 
@@ -701,8 +762,11 @@ const DashboardScreen = ({ navigation }) => {
     const parsedData = parseMessage(chatMessage);
     console.log('Parsed data:', {
       name: parsedData.name,
+      contactNo: parsedData.contactNo,
       date: parsedData.date.toLocaleString(),
-      category: parsedData.category
+      category: parsedData.category,
+      source: parsedData.source,
+      location: parsedData.location
     });
 
     if (!parsedData.name) {
@@ -725,10 +789,10 @@ const DashboardScreen = ({ navigation }) => {
 
     const leadData = {
       name: parsedData.name,
-      contactNo: parsedData.isPhoneNumber ? parsedData.name : '',
-      source: 'chat',
+      contactNo: parsedData.contactNo,
+      source: parsedData.source || 'chat',
       category: parsedData.category,
-      location: '',
+      location: parsedData.location || '',
       alertTime: localDateString,
     };
 
@@ -1418,6 +1482,11 @@ const styles = StyleSheet.create({
   swipeDeleteText: {
     color: 'white',
     fontWeight: 'bold',
+  },
+  callButton: {
+    padding: 8,
+    borderRadius: 20,
+    backgroundColor: '#f0f0f0',
   },
 });
 
