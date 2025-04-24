@@ -558,15 +558,43 @@ const DashboardScreen = ({ navigation }) => {
     console.log('Original message:', message);
 
     const tomorrowRegex = /tomorrow|tmrw|tmr/i;
-    const timeRegex = /(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/i;
+    const timeRegex = /(?:^|\s)(\d{1,2})(?::(\d{2}))?\s*(am|pm)(?:\s|$)/i; // More strict time regex
     const callRegex = /(?:to\s+)?call\s+([a-zA-Z]+)/i;
     const todayRegex = /today/i;
+    const phoneRegex = /^\+?[0-9]{10,15}$/; // Regex to match phone numbers
 
     let date = new Date();
     let name = '';
     let category = 'Follow up with';
 
     console.log('Initial date:', date.toLocaleString());
+
+    // Check if message is a phone number
+    const trimmedMessage = message.trim();
+    if (phoneRegex.test(trimmedMessage)) {
+      console.log('Phone number detected, setting default reminder');
+      date.setDate(date.getDate() + 2);
+      date.setHours(10, 0, 0, 0);
+      return {
+        name: trimmedMessage,
+        date,
+        category,
+        isPhoneNumber: true
+      };
+    }
+
+    // Check if message is just pasted text without name or time
+    if (!callRegex.test(message) && !timeRegex.test(message)) {
+      // Set default reminder after two days at 10 AM
+      date.setDate(date.getDate() + 2);
+      date.setHours(10, 0, 0, 0);
+      console.log('Default reminder set for 2 days later at 10 AM:', date.toLocaleString());
+      return {
+        name: trimmedMessage,
+        date,
+        category
+      };
+    }
 
     // Check for tomorrow
     if (tomorrowRegex.test(message)) {
@@ -614,7 +642,7 @@ const DashboardScreen = ({ navigation }) => {
     });
 
     return {
-      name,
+      name: name || trimmedMessage,
       date,
       category
     };
@@ -653,7 +681,7 @@ const DashboardScreen = ({ navigation }) => {
 
     const leadData = {
       name: parsedData.name,
-      contactNo: '',
+      contactNo: parsedData.isPhoneNumber ? parsedData.name : '',
       source: 'chat',
       category: parsedData.category,
       location: '',
