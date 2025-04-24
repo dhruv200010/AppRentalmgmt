@@ -549,18 +549,35 @@ const DashboardScreen = ({ navigation }) => {
               {item.contactNo ? (
                 <Text style={styles.leadContact}>{item.contactNo}</Text>
               ) : null}
-              <Text style={styles.leadDetails}>
-                {item.category} • {item.source} • {item.location}
-              </Text>
-              <Text style={styles.leadAlert}>
-                Alert: {new Date(item.alertTime).toLocaleString([], { 
-                  year: 'numeric',
-                  month: 'numeric',
-                  day: 'numeric',
-                  hour: '2-digit',
-                  minute: '2-digit'
-                })}
-              </Text>
+              <View style={styles.leadDetails}>
+                {item.category && (
+                  <Text style={[styles.categoryTag, styles.categoryTagCategory]}>
+                    {item.category}
+                  </Text>
+                )}
+                {item.source && (
+                  <Text style={[styles.categoryTag, styles.categoryTagSource]}>
+                    {item.source}
+                  </Text>
+                )}
+                {item.location && (
+                  <Text style={[styles.categoryTag, styles.categoryTagLocation]}>
+                    {item.location}
+                  </Text>
+                )}
+              </View>
+              <View style={styles.leadAlert}>
+                <Icon name="bell" size={14} color="#007AFF" />
+                <Text style={{ color: '#007AFF' }}>
+                  {new Date(item.alertTime).toLocaleString([], { 
+                    year: 'numeric',
+                    month: 'numeric',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                  })}
+                </Text>
+              </View>
             </View>
             {item.contactNo && item.contactNo.trim() !== '' && (
               <TouchableOpacity 
@@ -1374,10 +1391,41 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#666',
     marginBottom: 4,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 5,
+  },
+  categoryTag: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  categoryTagLocation: {
+    backgroundColor: '#E3F2FD',
+    color: '#1976D2',
+  },
+  categoryTagSource: {
+    backgroundColor: '#E8F5E9',
+    color: '#2E7D32',
+  },
+  categoryTagCategory: {
+    backgroundColor: '#FFF3E0',
+    color: '#E65100',
   },
   leadAlert: {
     fontSize: 12,
     color: '#007AFF',
+    backgroundColor: '#E3F2FD',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    alignSelf: 'flex-start',
+    marginTop: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
   leadActions: {
     flexDirection: 'row',
