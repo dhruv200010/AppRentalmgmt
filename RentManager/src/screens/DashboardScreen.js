@@ -379,25 +379,30 @@ const DashboardScreen = ({ navigation }) => {
   }, []);
 
   const handleAddLead = async () => {
-    if (!leadName || !contactNo || !source || !category || !location) {
-      Alert.alert('Error', 'Please fill in all required fields');
+    if (!leadName || !contactNo) {
+      Alert.alert('Error', 'Please enter name and contact number');
       return;
     }
 
     try {
       console.log('Adding new lead...');
-      console.log('Alert time:', alertTime.toLocaleString());
-
+      
+      // Set default date to 2 days later at 10 AM if not already set
+      const defaultDate = new Date();
+      defaultDate.setDate(defaultDate.getDate() + 2);
+      defaultDate.setHours(10, 0, 0, 0);
+      
       const leadData = {
         name: leadName,
         contactNo,
-        source,
-        category,
-        location,
-        alertTime: alertTime.toISOString(),
+        source: source || '',
+        category: category || 'Follow up with',
+        location: location || '',
+        alertTime: alertTime ? alertTime.toISOString() : defaultDate.toISOString(),
       };
 
       console.log('Lead data to be saved:', leadData);
+      console.log('Alert time:', leadData.alertTime);
 
       if (editingLead) {
         console.log('Updating existing lead:', editingLead.id);
@@ -459,7 +464,11 @@ const DashboardScreen = ({ navigation }) => {
     setSource('');
     setCategory('');
     setLocation('');
-    setAlertTime(new Date());
+    // Set default date to 2 days later at 10 AM
+    const defaultDate = new Date();
+    defaultDate.setDate(defaultDate.getDate() + 2);
+    defaultDate.setHours(10, 0, 0, 0);
+    setAlertTime(defaultDate);
   };
 
   const cancelNotification = async (leadId) => {
@@ -537,7 +546,9 @@ const DashboardScreen = ({ navigation }) => {
           >
             <View style={styles.leadInfo}>
               <Text style={styles.leadName}>{item.name}</Text>
-              <Text style={styles.leadContact}>{item.contactNo}</Text>
+              {item.contactNo ? (
+                <Text style={styles.leadContact}>{item.contactNo}</Text>
+              ) : null}
               <Text style={styles.leadDetails}>
                 {item.category} • {item.source} • {item.location}
               </Text>
@@ -551,7 +562,7 @@ const DashboardScreen = ({ navigation }) => {
                 })}
               </Text>
             </View>
-            {item.contactNo && (
+            {item.contactNo && item.contactNo.trim() !== '' && (
               <TouchableOpacity 
                 style={styles.callButton}
                 onPress={handleCall}
@@ -571,14 +582,21 @@ const DashboardScreen = ({ navigation }) => {
     
     if (Platform.OS === 'android') {
       setShowDatePicker(false);
-      setShowTimePicker(true);
-    }
-    if (selectedDate) {
-      const newDate = new Date(selectedDate);
-      newDate.setHours(alertTime.getHours());
-      newDate.setMinutes(alertTime.getMinutes());
-      console.log('New date after setting time:', newDate.toLocaleString());
-      setAlertTime(newDate);
+      if (event.type === 'set') {
+        const newDate = new Date(selectedDate);
+        newDate.setHours(alertTime.getHours());
+        newDate.setMinutes(alertTime.getMinutes());
+        console.log('New date after setting time:', newDate.toLocaleString());
+        setAlertTime(newDate);
+      }
+    } else {
+      if (selectedDate) {
+        const newDate = new Date(selectedDate);
+        newDate.setHours(alertTime.getHours());
+        newDate.setMinutes(alertTime.getMinutes());
+        console.log('New date after setting time:', newDate.toLocaleString());
+        setAlertTime(newDate);
+      }
     }
   };
 
@@ -588,13 +606,21 @@ const DashboardScreen = ({ navigation }) => {
     
     if (Platform.OS === 'android') {
       setShowTimePicker(false);
-    }
-    if (selectedTime) {
-      const newDate = new Date(alertTime);
-      newDate.setHours(selectedTime.getHours());
-      newDate.setMinutes(selectedTime.getMinutes());
-      console.log('New time after setting:', newDate.toLocaleString());
-      setAlertTime(newDate);
+      if (event.type === 'set') {
+        const newDate = new Date(alertTime);
+        newDate.setHours(selectedTime.getHours());
+        newDate.setMinutes(selectedTime.getMinutes());
+        console.log('New time after setting:', newDate.toLocaleString());
+        setAlertTime(newDate);
+      }
+    } else {
+      if (selectedTime) {
+        const newDate = new Date(alertTime);
+        newDate.setHours(selectedTime.getHours());
+        newDate.setMinutes(selectedTime.getMinutes());
+        console.log('New time after setting:', newDate.toLocaleString());
+        setAlertTime(newDate);
+      }
     }
   };
 
@@ -603,12 +629,15 @@ const DashboardScreen = ({ navigation }) => {
       setPickerMode(mode);
       if (mode === 'date') {
         setShowDatePicker(true);
+        setShowTimePicker(false);
       } else {
         setShowTimePicker(true);
+        setShowDatePicker(false);
       }
     } else {
       setPickerMode(mode);
       setShowDatePicker(true);
+      setShowTimePicker(false);
     }
   };
 
