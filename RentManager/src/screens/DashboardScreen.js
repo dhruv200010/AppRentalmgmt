@@ -13,6 +13,7 @@ import {
   Animated,
   PanResponder,
   Linking,
+  ToastAndroid,
 } from 'react-native';
 import { useSelector, useDispatch } from 'react-redux';
 import { deleteProperty, addProperty } from '../store/slices/propertySlice';
@@ -21,6 +22,7 @@ import { Picker } from '@react-native-picker/picker';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import * as Notifications from 'expo-notifications';
+import * as Clipboard from 'expo-clipboard';
 
 // Configure notifications
 Notifications.setNotificationHandler({
@@ -470,6 +472,26 @@ const DashboardScreen = ({ navigation }) => {
   const renderLead = ({ item }) => {
     const swipeX = new Animated.Value(0);
 
+    const handleLongPress = async () => {
+      if (item.contactNo) {
+        try {
+          await Clipboard.setStringAsync(item.contactNo);
+          if (Platform.OS === 'android') {
+            ToastAndroid.show('Copied!', ToastAndroid.SHORT);
+          } else {
+            Alert.alert('', 'Copied!', [{ text: 'OK' }]);
+          }
+        } catch (error) {
+          console.error('Error copying to clipboard:', error);
+          if (Platform.OS === 'android') {
+            ToastAndroid.show('Failed to copy', ToastAndroid.SHORT);
+          } else {
+            Alert.alert('', 'Failed to copy', [{ text: 'OK' }]);
+          }
+        }
+      }
+    };
+
     const panResponder = PanResponder.create({
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: (_, gestureState) => {
@@ -523,6 +545,7 @@ const DashboardScreen = ({ navigation }) => {
           <TouchableOpacity 
             style={styles.leadHeader}
             onPress={() => handleEditLead(item)}
+            onLongPress={handleLongPress}
             activeOpacity={0.7}
           >
             <View style={styles.leadInfo}>
