@@ -220,8 +220,9 @@ const DashboardScreen = ({ navigation }) => {
   const scheduleNotification = async (lead, leadId) => {
     try {
       console.log('\n=== Starting notification scheduling ===');
-      console.log('Lead data:', lead);
+      console.log('Lead data:', JSON.stringify(lead, null, 2));
       console.log('Lead ID:', leadId);
+      console.log('Lead ID type:', typeof leadId);
 
       // Debug 1: Check notification permissions
       const { status } = await Notifications.requestPermissionsAsync();
@@ -235,12 +236,23 @@ const DashboardScreen = ({ navigation }) => {
 
       // Debug 2: Check if we need to cancel existing notification
       if (leadId) {
-        console.log('Debug 2 - Canceling existing notification for ID:', leadId);
-        try {
-          await Notifications.cancelScheduledNotificationAsync(leadId);
-          console.log('Debug 2 - Successfully canceled existing notification');
-        } catch (cancelError) {
-          console.log('Debug 2 - No existing notification to cancel:', cancelError);
+        console.log('Debug 2 - Checking for existing notification with ID:', leadId.toString());
+        const existingNotifications = await Notifications.getAllScheduledNotificationsAsync();
+        const existingNotification = existingNotifications.find(n => 
+          n.identifier === leadId.toString() || 
+          (n.content.data && n.content.data.leadId === leadId.toString())
+        );
+        
+        if (existingNotification) {
+          console.log('Debug 2 - Found existing notification:', JSON.stringify(existingNotification, null, 2));
+          try {
+            await Notifications.cancelScheduledNotificationAsync(existingNotification.identifier);
+            console.log('Debug 2 - Successfully canceled existing notification');
+          } catch (cancelError) {
+            console.log('Debug 2 - Error canceling existing notification:', cancelError);
+          }
+        } else {
+          console.log('Debug 2 - No existing notification found to cancel');
         }
       }
       
@@ -273,7 +285,7 @@ const DashboardScreen = ({ navigation }) => {
         const notificationContent = {
           title: `${lead.category} ${lead.name}`,
           body: `for ${lead.location}`,
-          data: { leadId },
+          data: { leadId: leadId.toString() },
           sound: true,
           priority: Notifications.AndroidNotificationPriority.HIGH,
           channelId: Platform.OS === 'android' ? 'default' : null
@@ -286,10 +298,12 @@ const DashboardScreen = ({ navigation }) => {
         const identifier = await Notifications.scheduleNotificationAsync({
           content: notificationContent,
           trigger,
+          identifier: leadId.toString()
         });
         console.log('Debug 6 - Notification scheduling result:', {
           identifier,
-          success: !!identifier
+          success: !!identifier,
+          expectedIdentifier: leadId.toString()
         });
 
         // Debug 7: Verify the scheduled notification
@@ -298,15 +312,25 @@ const DashboardScreen = ({ navigation }) => {
         console.log('Debug 7 - All scheduled notifications:', JSON.stringify(scheduledNotifications, null, 2));
         
         // Debug 8: Verify our specific notification
-        const ourNotification = scheduledNotifications.find(n => n.identifier === identifier);
+        const ourNotification = scheduledNotifications.find(n => 
+          n.identifier === leadId.toString() || 
+          (n.content.data && n.content.data.leadId === leadId.toString())
+        );
+        
         if (ourNotification) {
           console.log('Debug 8 - Found our scheduled notification:', JSON.stringify(ourNotification, null, 2));
-          console.log('Debug 8 - Scheduled time:', new Date(ourNotification.trigger.date).toLocaleString());
+          console.log('Debug 8 - Scheduled time:', new Date(ourNotification.trigger.value).toLocaleString());
           console.log('Debug 8 - Trigger configuration:', JSON.stringify(ourNotification.trigger, null, 2));
+          console.log('Debug 8 - Notification identifier:', ourNotification.identifier);
+          console.log('Debug 8 - Notification data:', JSON.stringify(ourNotification.content.data, null, 2));
+          
+          // Store the notification identifier in the lead data
+          return ourNotification.identifier;
         } else {
           console.error('Debug 8 - Could not find our scheduled notification in the list');
-          console.error('Debug 8 - Expected identifier:', identifier);
+          console.error('Debug 8 - Expected identifier:', leadId.toString());
           console.error('Debug 8 - Available identifiers:', scheduledNotifications.map(n => n.identifier));
+          console.error('Debug 8 - Available lead IDs:', scheduledNotifications.map(n => n.content.data?.leadId).filter(id => id));
           throw new Error('Notification was not properly scheduled');
         }
         
@@ -324,59 +348,6 @@ const DashboardScreen = ({ navigation }) => {
       Alert.alert('Error', 'Failed to schedule notification. Please try again.');
     }
   };
-
-  // Add notification listener
-  useEffect(() => {
-    console.log('Setting up notification listeners...');
-
-    // This listener is called when a notification is received while the app is in the foreground
-    const subscription = Notifications.addNotificationReceivedListener(notification => {
-      console.log('\n=== Notification received ===');
-      console.log('Notification object:', JSON.stringify(notification, null, 2));
-      console.log('Notification date:', new Date(notification.date).toLocaleString());
-      console.log('Notification content:', JSON.stringify(notification.request.content, null, 2));
-      console.log('Notification trigger:', JSON.stringify(notification.request.trigger, null, 2));
-      console.log('Trigger date:', notification.request.trigger?.date?.toLocaleString());
-      console.log('Current time when received:', new Date().toLocaleString());
-      console.log('Time difference:', new Date().getTime() - notification.date);
-      console.log('=== End of notification details ===\n');
-    });
-
-    // This listener is called when a user taps on a notification
-    const responseSubscription = Notifications.addNotificationResponseReceivedListener(response => {
-      console.log('\n=== Notification response received ===');
-      console.log('Response object:', JSON.stringify(response, null, 2));
-      console.log('Notification date:', new Date(response.notification.date).toLocaleString());
-      console.log('Action identifier:', response.actionIdentifier);
-      console.log('User text:', response.userText);
-      console.log('=== End of response details ===\n');
-    });
-
-    // Get initial notification
-    Notifications.getLastNotificationResponseAsync().then(response => {
-      if (response) {
-        console.log('Last notification response:', JSON.stringify(response, null, 2));
-      }
-    });
-
-    // List all scheduled notifications on startup
-    Notifications.getAllScheduledNotificationsAsync().then(notifications => {
-      console.log('Initial scheduled notifications:', JSON.stringify(notifications, null, 2));
-      notifications.forEach(notification => {
-        console.log('Scheduled notification:', {
-          id: notification.identifier,
-          trigger: notification.trigger,
-          scheduledTime: notification.trigger?.date?.toLocaleString() || 'N/A'
-        });
-      });
-    });
-
-    return () => {
-      console.log('Cleaning up notification listeners...');
-      subscription.remove();
-      responseSubscription.remove();
-    };
-  }, []);
 
   const handleAddLead = async () => {
     if (!leadName || !contactNo) {
@@ -406,13 +377,13 @@ const DashboardScreen = ({ navigation }) => {
 
       if (editingLead) {
         console.log('Updating existing lead:', editingLead.id);
-        dispatch(updateLead({ ...leadData, id: editingLead.id }));
-        await scheduleNotification(leadData, editingLead.id);
+        const notificationId = await scheduleNotification(leadData, editingLead.id);
+        dispatch(updateLead({ ...leadData, id: editingLead.id, notificationId }));
       } else {
         console.log('Creating new lead');
-        const newLead = dispatch(addLead(leadData));
-        console.log('New lead created:', newLead);
-        await scheduleNotification(leadData, newLead.id);
+        const tempId = Date.now().toString();
+        const notificationId = await scheduleNotification(leadData, tempId);
+        dispatch(addLead({ ...leadData, id: tempId, notificationId }));
       }
 
       setLeadModalVisible(false);
@@ -445,8 +416,26 @@ const DashboardScreen = ({ navigation }) => {
           style: 'destructive',
           onPress: async () => {
             try {
-              await cancelNotification(leadId);
+              console.log('\n=== Starting lead deletion ===');
+              console.log('Lead ID to delete:', leadId);
+              
+              // Get the lead from Redux store to ensure we have the correct ID and notificationId
+              const lead = leads.find(l => l.id === leadId);
+              if (!lead) {
+                console.error('Lead not found in Redux store');
+                return;
+              }
+              
+              console.log('Found lead in Redux store:', lead);
+              
+              // Use the stored notificationId for cancellation
+              if (lead.notificationId) {
+                await cancelNotification(lead.notificationId);
+              }
+              
               dispatch(deleteLead(leadId));
+              
+              console.log('=== Lead deletion completed ===\n');
             } catch (error) {
               Alert.alert('Error', 'Failed to delete lead. Please try again.');
               console.error('Error deleting lead:', error);
@@ -469,14 +458,6 @@ const DashboardScreen = ({ navigation }) => {
     defaultDate.setDate(defaultDate.getDate() + 2);
     defaultDate.setHours(10, 0, 0, 0);
     setAlertTime(defaultDate);
-  };
-
-  const cancelNotification = async (leadId) => {
-    try {
-      await Notifications.cancelScheduledNotificationAsync(leadId);
-    } catch (error) {
-      console.error('Error canceling notification:', error);
-    }
   };
 
   const filteredLeads = leads.filter(lead => 
@@ -783,7 +764,7 @@ const DashboardScreen = ({ navigation }) => {
     console.log('Final parsed data:', {
       name: name || trimmedMessage,
       contactNo,
-      date: date.toLocaleString(),
+      date,
       category,
       source,
       location
@@ -846,17 +827,17 @@ const DashboardScreen = ({ navigation }) => {
     console.log('Alert time in local format:', localDateString);
 
     try {
-      // Create a temporary ID for the notification
+      // Generate a temporary ID for the notification
       const tempId = Date.now().toString();
       console.log('Temporary ID for notification:', tempId);
       
       // Schedule notification first with the temporary ID
       console.log('Scheduling notification...');
-      await scheduleNotification(leadData, tempId);
+      const notificationId = await scheduleNotification(leadData, tempId);
 
-      // Then create the lead
+      // Then create the lead with the same ID
       console.log('Creating lead in Redux store...');
-      dispatch(addLead(leadData));
+      dispatch(addLead({ ...leadData, id: tempId, notificationId }));
 
       setChatMessage('');
       setShowChatBox(false);
@@ -870,6 +851,111 @@ const DashboardScreen = ({ navigation }) => {
       Alert.alert('Error', 'Failed to create alert. Please try again.');
     }
   };
+
+  const cancelNotification = async (notificationId) => {
+    try {
+      console.log('\n=== Starting notification cancellation ===');
+      console.log('Notification ID to cancel:', notificationId);
+      console.log('Notification ID type:', typeof notificationId);
+      
+      // First, get all scheduled notifications
+      const scheduledNotifications = await Notifications.getAllScheduledNotificationsAsync();
+      console.log('Current scheduled notifications count:', scheduledNotifications.length);
+      
+      // Find our specific notification by looking for the exact identifier
+      const notificationToCancel = scheduledNotifications.find(n => 
+        n.identifier === notificationId.toString()
+      );
+      
+      if (notificationToCancel) {
+        console.log('Found notification to cancel:', JSON.stringify(notificationToCancel, null, 2));
+        console.log('Notification identifier:', notificationToCancel.identifier);
+        console.log('Notification data:', JSON.stringify(notificationToCancel.content.data, null, 2));
+        
+        await Notifications.cancelScheduledNotificationAsync(notificationToCancel.identifier);
+        console.log('Successfully canceled notification');
+        
+        // Verify cancellation by checking all scheduled notifications again
+        const updatedNotifications = await Notifications.getAllScheduledNotificationsAsync();
+        const isStillScheduled = updatedNotifications.some(n => 
+          n.identifier === notificationId.toString()
+        );
+        
+        if (isStillScheduled) {
+          console.error('Notification still exists after cancellation attempt');
+          console.error('Remaining notifications:', JSON.stringify(updatedNotifications, null, 2));
+          throw new Error('Failed to cancel notification');
+        } else {
+          console.log('Verification successful: Notification has been removed from scheduled notifications');
+        }
+      } else {
+        console.log('No notification found with identifier:', notificationId);
+        console.log('Available identifiers:', scheduledNotifications.map(n => n.identifier));
+        console.log('Available lead IDs:', scheduledNotifications.map(n => n.content.data?.leadId).filter(id => id));
+      }
+      
+      console.log('=== Notification cancellation completed ===\n');
+    } catch (error) {
+      console.error('Error in cancelNotification:', error);
+      console.error('Error details:', {
+        message: error.message,
+        stack: error.stack,
+      });
+    }
+  };
+
+  // Add notification listener
+  useEffect(() => {
+    console.log('Setting up notification listeners...');
+
+    // This listener is called when a notification is received while the app is in the foreground
+    const subscription = Notifications.addNotificationReceivedListener(notification => {
+      console.log('\n=== Notification received ===');
+      console.log('Notification object:', JSON.stringify(notification, null, 2));
+      console.log('Notification date:', new Date(notification.date).toLocaleString());
+      console.log('Notification content:', JSON.stringify(notification.request.content, null, 2));
+      console.log('Notification trigger:', JSON.stringify(notification.request.trigger, null, 2));
+      console.log('Trigger date:', notification.request.trigger?.date?.toLocaleString());
+      console.log('Current time when received:', new Date().toLocaleString());
+      console.log('Time difference:', new Date().getTime() - notification.date);
+      console.log('=== End of notification details ===\n');
+    });
+
+    // This listener is called when a user taps on a notification
+    const responseSubscription = Notifications.addNotificationResponseReceivedListener(response => {
+      console.log('\n=== Notification response received ===');
+      console.log('Response object:', JSON.stringify(response, null, 2));
+      console.log('Notification date:', new Date(response.notification.date).toLocaleString());
+      console.log('Action identifier:', response.actionIdentifier);
+      console.log('User text:', response.userText);
+      console.log('=== End of response details ===\n');
+    });
+
+    // Get initial notification
+    Notifications.getLastNotificationResponseAsync().then(response => {
+      if (response) {
+        console.log('Last notification response:', JSON.stringify(response, null, 2));
+      }
+    });
+
+    // List all scheduled notifications on startup
+    Notifications.getAllScheduledNotificationsAsync().then(notifications => {
+      console.log('Initial scheduled notifications:', JSON.stringify(notifications, null, 2));
+      notifications.forEach(notification => {
+        console.log('Scheduled notification:', {
+          id: notification.identifier,
+          trigger: notification.trigger,
+          scheduledTime: notification.trigger?.date?.toLocaleString() || 'N/A'
+        });
+      });
+    });
+
+    return () => {
+      console.log('Cleaning up notification listeners...');
+      subscription.remove();
+      responseSubscription.remove();
+    };
+  }, []);
 
   return (
     <View style={styles.container}>
