@@ -156,7 +156,7 @@ const DashboardScreen = ({ navigation }) => {
           isVacant && styles.vacantRoomContent
         ]}>
           <Text style={styles.roomTypeLabel}>
-            {room.type === 'Private bath' ? 'P' : room.type === 'Shared bath' ? 'S' : 'G'}
+            {room.type}
           </Text>
           <Text style={styles.roomNumber}>{room.tenant || 'Vacant'}</Text>
           <Text style={[styles.duration, { color: statusColor }]}>

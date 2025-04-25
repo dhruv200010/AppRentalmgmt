@@ -36,6 +36,16 @@ const RoomScreen = ({ route }) => {
       return;
     }
 
+    // Check for duplicate room numbers
+    const isDuplicate = property.rooms.some(room => 
+      room.type === roomType && (!editingRoom || room.id !== editingRoom.id)
+    );
+
+    if (isDuplicate) {
+      Alert.alert('Error', `Room number ${roomType} already exists in this property`);
+      return;
+    }
+
     const roomData = {
       propertyId,
       number: tenant, // Using tenant name as room number
@@ -106,7 +116,7 @@ const RoomScreen = ({ route }) => {
           </TouchableOpacity>
         </View>
       </View>
-      <Text style={styles.roomType}>Type: {item.type}</Text>
+      <Text style={styles.roomType}>Room: {item.type}</Text>
       <Text style={styles.roomStatus}>Status: {item.status}</Text>
       {item.occupiedUntil && (
         <Text style={styles.occupiedUntil}>
@@ -159,10 +169,14 @@ const RoomScreen = ({ route }) => {
               onValueChange={setRoomType}
               style={styles.picker}
             >
-              <Picker.Item label="Select Room Type" value="" />
-              <Picker.Item label="Private bath" value="Private bath" />
-              <Picker.Item label="Shared bath" value="Shared bath" />
-              <Picker.Item label="Garage" value="Garage" />
+              <Picker.Item label="Room no" value="" />
+              <Picker.Item label="1" value="1" />
+              <Picker.Item label="2" value="2" />
+              <Picker.Item label="3" value="3" />
+              <Picker.Item label="4" value="4" />
+              <Picker.Item label="5" value="5" />
+              <Picker.Item label="6" value="6" />
+              <Picker.Item label="7" value="7" />
             </Picker>
 
             <Picker
