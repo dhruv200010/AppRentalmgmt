@@ -17,7 +17,7 @@ import {
 } from 'react-native';
 import { useSelector, useDispatch } from 'react-redux';
 import { deleteProperty, addProperty } from '../store/slices/propertySlice';
-import { addLead, updateLead, deleteLead } from '../store/slices/leadSlice';
+import { addLead, updateLead, deleteLead, addResponse, rescheduleAlert } from '../store/slices/leadSlice';
 import { Picker } from '@react-native-picker/picker';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
@@ -70,6 +70,14 @@ const DashboardScreen = ({ navigation }) => {
   const [activeTab, setActiveTab] = useState('properties');
   const [chatMessage, setChatMessage] = useState('');
   const [showChatBox, setShowChatBox] = useState(false);
+  const [responseText, setResponseText] = useState('');
+  const [showResponseInput, setShowResponseInput] = useState(null);
+  const [showReschedulePicker, setShowReschedulePicker] = useState(false);
+  const [rescheduleDate, setRescheduleDate] = useState(new Date());
+  const [selectedLeadForReschedule, setSelectedLeadForReschedule] = useState(null);
+  const [showDateTimePicker, setShowDateTimePicker] = useState(false);
+  const [showResponsesDialog, setShowResponsesDialog] = useState(false);
+  const [selectedLeadResponses, setSelectedLeadResponses] = useState(null);
 
   const handleAddProperty = () => {
     if (!propertyName.trim()) {
@@ -469,179 +477,83 @@ const DashboardScreen = ({ navigation }) => {
     lead.location.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const renderLead = ({ item }) => {
-    const swipeX = new Animated.Value(0);
+  const handleAddResponse = (leadId) => {
+    if (!responseText.trim()) {
+      Alert.alert('Error', 'Please enter a response');
+      return;
+    }
 
-    const handleLongPress = async () => {
-      if (item.contactNo) {
-        try {
-          await Clipboard.setStringAsync(item.contactNo);
-          if (Platform.OS === 'android') {
-            ToastAndroid.show('Copied!', ToastAndroid.SHORT);
-          } else {
-            Alert.alert('', 'Copied!', [{ text: 'OK' }]);
-          }
-        } catch (error) {
-          console.error('Error copying to clipboard:', error);
-          if (Platform.OS === 'android') {
-            ToastAndroid.show('Failed to copy', ToastAndroid.SHORT);
-          } else {
-            Alert.alert('', 'Failed to copy', [{ text: 'OK' }]);
-          }
-        }
+    dispatch(addResponse({ leadId, response: responseText.trim() }));
+    setResponseText('');
+    setShowResponseInput(null);
+  };
+
+  const handleReschedule = async (lead) => {
+    try {
+      if (rescheduleDate <= new Date()) {
+        Alert.alert('Error', 'Please select a future date and time');
+        return;
       }
-    };
 
-    const panResponder = PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: (_, gestureState) => {
-        return Math.abs(gestureState.dx) > 10;
-      },
-      onPanResponderMove: (_, gestureState) => {
-        if (gestureState.dx < 0) { // Only allow left swipe
-          swipeX.setValue(gestureState.dx);
-        }
-      },
-      onPanResponderRelease: (_, gestureState) => {
-        if (gestureState.dx < -100) { // Swipe left more than 100 units
-          Animated.timing(swipeX, {
-            toValue: -100,
-            duration: 200,
-            useNativeDriver: true,
-          }).start();
-        } else {
-          Animated.spring(swipeX, {
-            toValue: 0,
-            useNativeDriver: true,
-            friction: 5,
-          }).start();
-        }
-      },
-    });
-
-    const handleCall = () => {
-      if (item.contactNo) {
-        Linking.openURL(`tel:${item.contactNo}`);
+      // Cancel existing notification
+      if (lead.notificationId) {
+        await cancelNotification(lead.notificationId);
       }
-    };
 
-    return (
-      <View style={styles.leadCardContainer}>
-        <TouchableOpacity 
-          style={styles.swipeDeleteContainer}
-          onPress={() => handleDeleteLead(item.id)}
-        >
-          <Text style={styles.swipeDeleteText}>Delete</Text>
-        </TouchableOpacity>
-        <Animated.View
-          {...panResponder.panHandlers}
-          style={[
-            styles.leadCard,
-            {
-              transform: [{ translateX: swipeX }],
-            },
-          ]}
-        >
-          <TouchableOpacity 
-            style={styles.leadHeader}
-            onPress={() => handleEditLead(item)}
-            onLongPress={handleLongPress}
-            activeOpacity={0.7}
-          >
-            <View style={styles.leadInfo}>
-              <Text style={styles.leadName}>{item.name}</Text>
-              {item.contactNo ? (
-                <Text style={styles.leadContact}>{item.contactNo}</Text>
-              ) : null}
-              <View style={styles.leadDetails}>
-                {item.category && (
-                  <Text style={[styles.categoryTag, styles.categoryTagCategory]}>
-                    {item.category}
-                  </Text>
-                )}
-                {item.source && (
-                  <Text style={[styles.categoryTag, styles.categoryTagSource]}>
-                    {item.source}
-                  </Text>
-                )}
-                {item.location && (
-                  <Text style={[styles.categoryTag, styles.categoryTagLocation]}>
-                    {item.location}
-                  </Text>
-                )}
-              </View>
-              <View style={styles.leadAlert}>
-                <Icon name="bell" size={14} color="#007AFF" />
-                <Text style={{ color: '#007AFF' }}>
-                  {new Date(item.alertTime).toLocaleString([], { 
-                    year: 'numeric',
-                    month: 'numeric',
-                    day: 'numeric',
-                    hour: '2-digit',
-                    minute: '2-digit'
-                  })}
-                </Text>
-              </View>
-            </View>
-            {item.contactNo && item.contactNo.trim() !== '' && (
-              <TouchableOpacity 
-                style={styles.callButton}
-                onPress={handleCall}
-              >
-                <Icon name="phone" size={24} color="#34C759" />
-              </TouchableOpacity>
-            )}
-          </TouchableOpacity>
-        </Animated.View>
-      </View>
-    );
+      // Schedule new notification
+      const notificationId = await scheduleNotification(
+        { ...lead, alertTime: rescheduleDate.toISOString() },
+        lead.id
+      );
+
+      // Update lead with new alert time and notification ID
+      dispatch(rescheduleAlert({ 
+        leadId: lead.id, 
+        newAlertTime: rescheduleDate.toISOString(),
+        notificationId 
+      }));
+
+      setShowReschedulePicker(false);
+      setSelectedLeadForReschedule(null);
+      setShowDatePicker(false);
+      setShowTimePicker(false);
+    } catch (error) {
+      console.error('Error rescheduling alert:', error);
+      Alert.alert('Error', 'Failed to reschedule alert. Please try again.');
+    }
+  };
+
+  const handleReschedulePress = (lead) => {
+    setSelectedLeadForReschedule(lead);
+    setRescheduleDate(new Date(lead.alertTime));
+    setShowReschedulePicker(true);
+  };
+
+  const handleDateTimeChange = (event, selectedDate) => {
+    setShowDateTimePicker(false);
+    if (selectedDate) {
+      setRescheduleDate(selectedDate);
+    }
   };
 
   const handleDateChange = (event, selectedDate) => {
-    console.log('Date picker event:', event);
-    console.log('Selected date:', selectedDate?.toLocaleString());
-    
-    if (Platform.OS === 'android') {
-      setShowDatePicker(false);
-      if (event.type === 'set') {
-        const newDate = new Date(selectedDate);
-        newDate.setHours(alertTime.getHours());
-        newDate.setMinutes(alertTime.getMinutes());
-        console.log('New date after setting time:', newDate.toLocaleString());
-        setAlertTime(newDate);
-      }
-    } else {
-      if (selectedDate) {
-        const newDate = new Date(selectedDate);
-        newDate.setHours(alertTime.getHours());
-        newDate.setMinutes(alertTime.getMinutes());
-        console.log('New date after setting time:', newDate.toLocaleString());
-        setAlertTime(newDate);
-      }
+    setShowDatePicker(false);
+    if (selectedDate) {
+      const newDate = new Date(rescheduleDate);
+      newDate.setFullYear(selectedDate.getFullYear());
+      newDate.setMonth(selectedDate.getMonth());
+      newDate.setDate(selectedDate.getDate());
+      setRescheduleDate(newDate);
     }
   };
 
   const handleTimeChange = (event, selectedTime) => {
-    console.log('Time picker event:', event);
-    console.log('Selected time:', selectedTime?.toLocaleString());
-    
-    if (Platform.OS === 'android') {
-      setShowTimePicker(false);
-      if (event.type === 'set') {
-        const newDate = new Date(alertTime);
-        newDate.setHours(selectedTime.getHours());
-        newDate.setMinutes(selectedTime.getMinutes());
-        console.log('New time after setting:', newDate.toLocaleString());
-        setAlertTime(newDate);
-      }
-    } else {
-      if (selectedTime) {
-        const newDate = new Date(alertTime);
-        newDate.setHours(selectedTime.getHours());
-        newDate.setMinutes(selectedTime.getMinutes());
-        console.log('New time after setting:', newDate.toLocaleString());
-        setAlertTime(newDate);
-      }
+    setShowTimePicker(false);
+    if (selectedTime) {
+      const newDate = new Date(rescheduleDate);
+      newDate.setHours(selectedTime.getHours());
+      newDate.setMinutes(selectedTime.getMinutes());
+      setRescheduleDate(newDate);
     }
   };
 
@@ -980,6 +892,213 @@ const DashboardScreen = ({ navigation }) => {
     };
   }, []);
 
+  const handleShowResponses = (lead) => {
+    setSelectedLeadResponses(lead);
+    setShowResponsesDialog(true);
+  };
+
+  const renderLead = ({ item }) => {
+    const swipeX = new Animated.Value(0);
+
+    // Sort responses from latest to oldest
+    const sortedResponses = item.responses ? [...item.responses].sort((a, b) => 
+      new Date(b.timestamp) - new Date(a.timestamp)
+    ) : [];
+
+    const handleLongPress = async () => {
+      if (item.contactNo) {
+        try {
+          await Clipboard.setStringAsync(item.contactNo);
+          if (Platform.OS === 'android') {
+            ToastAndroid.show('Copied!', ToastAndroid.SHORT);
+          } else {
+            Alert.alert('', 'Copied!', [{ text: 'OK' }]);
+          }
+        } catch (error) {
+          console.error('Error copying to clipboard:', error);
+          if (Platform.OS === 'android') {
+            ToastAndroid.show('Failed to copy', ToastAndroid.SHORT);
+          } else {
+            Alert.alert('', 'Failed to copy', [{ text: 'OK' }]);
+          }
+        }
+      }
+    };
+
+    const panResponder = PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_, gestureState) => {
+        return Math.abs(gestureState.dx) > 10;
+      },
+      onPanResponderMove: (_, gestureState) => {
+        if (gestureState.dx < 0) { // Only allow left swipe
+          swipeX.setValue(gestureState.dx);
+        }
+      },
+      onPanResponderRelease: (_, gestureState) => {
+        if (gestureState.dx < -100) { // Swipe left more than 100 units
+          Animated.timing(swipeX, {
+            toValue: -100,
+            duration: 200,
+            useNativeDriver: true,
+          }).start();
+        } else {
+          Animated.spring(swipeX, {
+            toValue: 0,
+            useNativeDriver: true,
+            friction: 5,
+          }).start();
+        }
+      },
+    });
+
+    const handleCall = () => {
+      if (item.contactNo) {
+        Linking.openURL(`tel:${item.contactNo}`);
+      }
+    };
+
+    return (
+      <View style={styles.leadCardContainer}>
+        <TouchableOpacity 
+          style={styles.swipeDeleteContainer}
+          onPress={() => handleDeleteLead(item.id)}
+        >
+          <Text style={styles.swipeDeleteText}>Delete</Text>
+        </TouchableOpacity>
+        <Animated.View
+          {...panResponder.panHandlers}
+          style={[
+            styles.leadCard,
+            {
+              transform: [{ translateX: swipeX }],
+            },
+          ]}
+        >
+          <TouchableOpacity 
+            style={styles.leadHeader}
+            onPress={() => handleEditLead(item)}
+            onLongPress={handleLongPress}
+            activeOpacity={0.7}
+          >
+            <View style={styles.leadInfo}>
+              <Text style={styles.leadName}>{item.name}</Text>
+              {item.contactNo ? (
+                <Text style={styles.leadContact}>{item.contactNo}</Text>
+              ) : null}
+              <View style={styles.leadDetails}>
+                {item.category && (
+                  <Text style={[styles.categoryTag, styles.categoryTagCategory]}>
+                    {item.category}
+                  </Text>
+                )}
+                {item.source && (
+                  <Text style={[styles.categoryTag, styles.categoryTagSource]}>
+                    {item.source}
+                  </Text>
+                )}
+                {item.location && (
+                  <Text style={[styles.categoryTag, styles.categoryTagLocation]}>
+                    {item.location}
+                  </Text>
+                )}
+              </View>
+              <View style={styles.leadAlert}>
+                <Icon name="bell" size={14} color="#007AFF" />
+                <Text style={{ color: '#007AFF' }}>
+                  {new Date(item.alertTime).toLocaleString([], { 
+                    year: 'numeric',
+                    month: 'numeric',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                  })}
+                </Text>
+              </View>
+            </View>
+          </TouchableOpacity>
+
+          {/* Response Section - Show only latest response */}
+          {sortedResponses.length > 0 && (
+            <TouchableOpacity 
+              style={styles.responsesContainer}
+              onPress={() => handleShowResponses(item)}
+            >
+              <View style={styles.responseItem}>
+                <Text style={styles.responseText}>{sortedResponses[0].text}</Text>
+                <Text style={styles.responseTime}>
+                  {new Date(sortedResponses[0].timestamp).toLocaleDateString('en-US', {
+                    day: 'numeric',
+                    month: 'short'
+                  })}
+                </Text>
+                {sortedResponses.length > 1 && (
+                  <Text style={styles.moreResponsesText}>
+                    +{sortedResponses.length - 1} more
+                  </Text>
+                )}
+              </View>
+            </TouchableOpacity>
+          )}
+
+          {/* Response Input */}
+          {showResponseInput === item.id && (
+            <View style={styles.responseInputContainer}>
+              <TextInput
+                style={styles.responseInput}
+                placeholder="Type your response..."
+                value={responseText}
+                onChangeText={setResponseText}
+                multiline
+              />
+              <View style={styles.responseButtons}>
+                <TouchableOpacity
+                  style={[styles.button, styles.cancelButton]}
+                  onPress={() => {
+                    setResponseText('');
+                    setShowResponseInput(null);
+                  }}
+                >
+                  <Text style={styles.buttonText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.button, styles.saveButton]}
+                  onPress={() => handleAddResponse(item.id)}
+                >
+                  <Text style={styles.buttonText}>Send</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+
+          {/* Action Buttons */}
+          <View style={styles.actionButtons}>
+            <TouchableOpacity
+              style={styles.iconButton}
+              onPress={() => setShowResponseInput(item.id)}
+            >
+              <Icon name="message-reply" size={24} color="#007AFF" />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.iconButton}
+              onPress={() => handleReschedulePress(item)}
+            >
+              <Icon name="calendar-clock" size={24} color="#FF9500" />
+            </TouchableOpacity>
+            {item.contactNo && (
+              <TouchableOpacity
+                style={styles.iconButton}
+                onPress={() => handleCall(item.contactNo)}
+              >
+                <Icon name="phone" size={24} color="#34C759" />
+              </TouchableOpacity>
+            )}
+          </View>
+        </Animated.View>
+      </View>
+    );
+  };
+
   return (
     <View style={styles.container}>
       <View style={styles.contentContainer}>
@@ -1132,81 +1251,96 @@ const DashboardScreen = ({ navigation }) => {
               {editingLead ? 'Edit Lead' : 'Add Lead'}
             </Text>
 
-            <TextInput
-              style={styles.input}
-              placeholder="Name"
-              value={leadName}
-              onChangeText={setLeadName}
-            />
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Name</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Enter name"
+                value={leadName}
+                onChangeText={setLeadName}
+              />
+            </View>
 
-            <TextInput
-              style={styles.input}
-              placeholder="Contact Number"
-              value={contactNo}
-              onChangeText={setContactNo}
-              keyboardType="phone-pad"
-            />
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Contact Number</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Enter contact number"
+                value={contactNo}
+                onChangeText={setContactNo}
+                keyboardType="phone-pad"
+              />
+            </View>
 
-            <View style={styles.pickerContainer}>
+            <View style={styles.inputGroup}>
               <Text style={styles.pickerLabel}>Source</Text>
-              <Picker
-                selectedValue={source}
-                onValueChange={setSource}
-                style={styles.picker}
-              >
-                <Picker.Item label="Select Source" value="" />
-                {sources.map((src) => (
-                  <Picker.Item key={src} label={src} value={src} />
-                ))}
-              </Picker>
+              <View style={styles.pickerContainer}>
+                <Picker
+                  selectedValue={source}
+                  onValueChange={setSource}
+                  style={styles.picker}
+                >
+                  <Picker.Item label="Select Source" value="" />
+                  {sources.map((src) => (
+                    <Picker.Item key={src} label={src} value={src} />
+                  ))}
+                </Picker>
+              </View>
             </View>
 
-            <View style={styles.pickerContainer}>
+            <View style={styles.inputGroup}>
               <Text style={styles.pickerLabel}>Category</Text>
-              <Picker
-                selectedValue={category}
-                onValueChange={setCategory}
-                style={styles.picker}
-              >
-                <Picker.Item label="Select Category" value="" />
-                {categories.map((cat) => (
-                  <Picker.Item key={cat} label={cat} value={cat} />
-                ))}
-              </Picker>
+              <View style={styles.pickerContainer}>
+                <Picker
+                  selectedValue={category}
+                  onValueChange={setCategory}
+                  style={styles.picker}
+                >
+                  <Picker.Item label="Select Category" value="" />
+                  {categories.map((cat) => (
+                    <Picker.Item key={cat} label={cat} value={cat} />
+                  ))}
+                </Picker>
+              </View>
             </View>
 
-            <View style={styles.pickerContainer}>
+            <View style={styles.inputGroup}>
               <Text style={styles.pickerLabel}>Location</Text>
-              <Picker
-                selectedValue={location}
-                onValueChange={setLocation}
-                style={styles.picker}
-              >
-                <Picker.Item label="Select Location" value="" />
-                {locations.map((loc) => (
-                  <Picker.Item key={loc} label={loc} value={loc} />
-                ))}
-              </Picker>
+              <View style={styles.pickerContainer}>
+                <Picker
+                  selectedValue={location}
+                  onValueChange={setLocation}
+                  style={styles.picker}
+                >
+                  <Picker.Item label="Select Location" value="" />
+                  {locations.map((loc) => (
+                    <Picker.Item key={loc} label={loc} value={loc} />
+                  ))}
+                </Picker>
+              </View>
             </View>
 
-            <View style={styles.dateTimeContainer}>
-              <TouchableOpacity
-                style={styles.dateButton}
-                onPress={() => showPicker('date')}
-              >
-                <Text style={styles.dateButtonText}>
-                  Date: {alertTime.toLocaleDateString()}
-                </Text>
-              </TouchableOpacity>
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Alert Time</Text>
+              <View style={styles.dateTimeContainer}>
+                <TouchableOpacity
+                  style={styles.dateButton}
+                  onPress={() => showPicker('date')}
+                >
+                  <Text style={styles.dateButtonText}>
+                    {alertTime.toLocaleDateString()}
+                  </Text>
+                </TouchableOpacity>
 
-              <TouchableOpacity
-                style={styles.dateButton}
-                onPress={() => showPicker('time')}
-              >
-                <Text style={styles.dateButtonText}>
-                  Time: {alertTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                </Text>
-              </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.dateButton}
+                  onPress={() => showPicker('time')}
+                >
+                  <Text style={styles.dateButtonText}>
+                    {alertTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </Text>
+                </TouchableOpacity>
+              </View>
             </View>
 
             {(showDatePicker || showTimePicker) && (
@@ -1236,6 +1370,134 @@ const DashboardScreen = ({ navigation }) => {
                 <Text style={styles.buttonText}>Save</Text>
               </TouchableOpacity>
             </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Reschedule Modal */}
+      <Modal
+        visible={showReschedulePicker}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => {
+          setShowReschedulePicker(false);
+          setSelectedLeadForReschedule(null);
+          setShowDatePicker(false);
+          setShowTimePicker(false);
+        }}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Reschedule Alert</Text>
+            
+            <View style={styles.dateTimeContainer}>
+              <TouchableOpacity
+                style={styles.dateButton}
+                onPress={() => setShowDatePicker(true)}
+              >
+                <Text style={styles.dateButtonText}>
+                  Date: {rescheduleDate.toLocaleDateString()}
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.dateButton}
+                onPress={() => setShowTimePicker(true)}
+              >
+                <Text style={styles.dateButtonText}>
+                  Time: {rescheduleDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {showDatePicker && (
+              <DateTimePicker
+                value={rescheduleDate}
+                mode="date"
+                display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                onChange={handleDateChange}
+                minimumDate={new Date()}
+              />
+            )}
+
+            {showTimePicker && (
+              <DateTimePicker
+                value={rescheduleDate}
+                mode="time"
+                display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                onChange={handleTimeChange}
+              />
+            )}
+
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.button, styles.cancelButton]}
+                onPress={() => {
+                  setShowReschedulePicker(false);
+                  setSelectedLeadForReschedule(null);
+                  setShowDatePicker(false);
+                  setShowTimePicker(false);
+                }}
+              >
+                <Text style={styles.buttonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.button, styles.saveButton]}
+                onPress={() => {
+                  if (selectedLeadForReschedule) {
+                    handleReschedule(selectedLeadForReschedule);
+                  }
+                  setShowDatePicker(false);
+                  setShowTimePicker(false);
+                }}
+              >
+                <Text style={styles.buttonText}>Reschedule</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Responses Dialog */}
+      <Modal
+        visible={showResponsesDialog}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => {
+          setShowResponsesDialog(false);
+          setSelectedLeadResponses(null);
+        }}
+      >
+        <View style={styles.dialogContainer}>
+          <View style={styles.dialogContent}>
+            <View style={styles.dialogHeader}>
+              <Text style={styles.dialogTitle}>Responses</Text>
+              <TouchableOpacity
+                onPress={() => {
+                  setShowResponsesDialog(false);
+                  setSelectedLeadResponses(null);
+                }}
+              >
+                <Icon name="close" size={24} color="#666" />
+              </TouchableOpacity>
+            </View>
+            <ScrollView style={styles.dialogResponses}>
+              {selectedLeadResponses?.responses && [...selectedLeadResponses.responses]
+                .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
+                .map((response, index) => (
+                  <View key={index} style={styles.dialogResponseItem}>
+                    <Text style={styles.dialogResponseText}>{response.text}</Text>
+                    <Text style={styles.dialogResponseTime}>
+                      {new Date(response.timestamp).toLocaleString([], {
+                        day: 'numeric',
+                        month: 'short',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                      })}
+                    </Text>
+                  </View>
+                ))}
+            </ScrollView>
           </View>
         </View>
       </Modal>
@@ -1331,58 +1593,20 @@ const styles = StyleSheet.create({
   },
   actionButtons: {
     flexDirection: 'row',
-    gap: 15,
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#e0e0e0',
   },
-  roomsContainer: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  roomStatus: {
-    padding: 10,
-    borderRadius: 8,
-    minWidth: 100,
-    borderLeftWidth: 4,
-    overflow: 'hidden',
-    position: 'relative',
-  },
-  roomContent: {
-    position: 'relative',
-    zIndex: 1,
-  },
-  vacantRoomContent: {
-    backgroundColor: 'white',
-    padding: 5,
-    borderRadius: 4,
-  },
-  stripedBackground: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    zIndex: 0,
-    overflow: 'hidden',
-  },
-  stripe: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    height: 2,
-    backgroundColor: '#e0e0e0',
-  },
-  roomTypeLabel: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginBottom: 5,
-  },
-  roomNumber: {
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  duration: {
-    fontSize: 12,
-    marginTop: 5,
-    fontWeight: '500',
+  iconButton: {
+    padding: 8,
+    borderRadius: 20,
+    backgroundColor: '#f0f0f0',
+    flex: 1,
+    alignItems: 'center',
+    marginHorizontal: 4,
   },
   modalContainer: {
     flex: 1,
@@ -1403,22 +1627,65 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     textAlign: 'center',
   },
+  inputGroup: {
+    marginBottom: 15,
+  },
+  inputLabel: {
+    fontSize: 16,
+    fontWeight: '500',
+    marginBottom: 8,
+    color: '#333',
+  },
   input: {
     borderWidth: 1,
     borderColor: '#ddd',
-    padding: 10,
-    borderRadius: 5,
+    padding: 12,
+    borderRadius: 8,
+    fontSize: 16,
+  },
+  pickerContainer: {
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 8,
     marginBottom: 15,
+  },
+  pickerLabel: {
+    fontSize: 16,
+    fontWeight: '500',
+    marginBottom: 8,
+    color: '#333',
+  },
+  picker: {
+    height: 50,
+  },
+  dateTimeContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 15,
+  },
+  dateButton: {
+    flex: 1,
+    backgroundColor: '#f0f0f0',
+    padding: 12,
+    borderRadius: 8,
+    marginHorizontal: 5,
+    alignItems: 'center',
+  },
+  dateButtonText: {
+    fontSize: 16,
+    color: '#333',
   },
   modalButtons: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     gap: 10,
+    marginTop: 10,
   },
   button: {
     flex: 1,
     padding: 15,
-    borderRadius: 5,
+    borderRadius: 8,
+    alignItems: 'center',
   },
   cancelButton: {
     backgroundColor: '#FF3B30',
@@ -1428,8 +1695,8 @@ const styles = StyleSheet.create({
   },
   buttonText: {
     color: 'white',
-    textAlign: 'center',
     fontWeight: 'bold',
+    fontSize: 16,
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -1536,90 +1803,49 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 4,
   },
-  leadActions: {
-    flexDirection: 'row',
-    gap: 10,
+  responsesContainer: {
+    marginTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#e0e0e0',
+    paddingTop: 8,
   },
-  dateTimeContainer: {
+  responseItem: {
+    backgroundColor: '#f5f5f5',
+    padding: 6,
+    borderRadius: 6,
+    marginBottom: 6,
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 15,
-  },
-  dateButton: {
-    flex: 1,
-    backgroundColor: '#f0f0f0',
-    padding: 10,
-    borderRadius: 5,
-    marginHorizontal: 5,
-  },
-  dateButtonText: {
-    textAlign: 'center',
-    color: '#333',
-  },
-  searchContainer: {
-    flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'white',
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    marginBottom: 15,
+  },
+  responseText: {
+    fontSize: 13,
+    color: '#333',
+    flex: 1,
+    marginRight: 8,
+  },
+  responseTime: {
+    fontSize: 11,
+    color: '#666',
+    minWidth: 50,
+    textAlign: 'right',
+  },
+  responseInputContainer: {
+    marginTop: 8,
+  },
+  responseInput: {
     borderWidth: 1,
     borderColor: '#ddd',
-  },
-  searchIcon: {
-    marginRight: 10,
-  },
-  searchInput: {
-    flex: 1,
-    height: 40,
-    fontSize: 16,
-  },
-  clearButton: {
-    padding: 5,
-  },
-  pickerContainer: {
-    marginBottom: 15,
-  },
-  pickerLabel: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginBottom: 8,
-    color: '#333',
-  },
-  picker: {
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 5,
-    height: 50,
-  },
-  fab: {
-    position: 'absolute',
-    right: 20,
-    bottom: 20,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: '#007AFF',
-    justifyContent: 'center',
-    alignItems: 'center',
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-  },
-  chatButton: {
+    borderRadius: 6,
     padding: 8,
-    borderRadius: 20,
-    backgroundColor: '#f0f0f0',
+    minHeight: 50,
+    marginBottom: 8,
+    fontSize: 13,
   },
-  chatFab: {
-    bottom: 86,
-    backgroundColor: '#34C759',
+  responseButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 10,
   },
   chatBox: {
     backgroundColor: 'white',
@@ -1653,6 +1879,29 @@ const styles = StyleSheet.create({
     color: 'white',
     fontWeight: 'bold',
   },
+  fab: {
+    position: 'absolute',
+    right: 20,
+    bottom: 20,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#007AFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+  },
+  chatFab: {
+    bottom: 86,
+    backgroundColor: '#34C759',
+  },
   swipeDeleteContainer: {
     position: 'absolute',
     right: 0,
@@ -1669,10 +1918,71 @@ const styles = StyleSheet.create({
     color: 'white',
     fontWeight: 'bold',
   },
-  callButton: {
-    padding: 8,
-    borderRadius: 20,
-    backgroundColor: '#f0f0f0',
+  moreResponsesText: {
+    fontSize: 11,
+    color: '#007AFF',
+    marginLeft: 8,
+  },
+  dialogContainer: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  dialogContent: {
+    backgroundColor: 'white',
+    borderRadius: 10,
+    width: '90%',
+    maxHeight: '80%',
+    padding: 16,
+  },
+  dialogHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  dialogTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  dialogResponses: {
+    maxHeight: '80%',
+  },
+  dialogResponseItem: {
+    backgroundColor: '#f5f5f5',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  dialogResponseText: {
+    fontSize: 14,
+    color: '#333',
+    marginBottom: 4,
+  },
+  dialogResponseTime: {
+    fontSize: 12,
+    color: '#666',
+    textAlign: 'right',
+  },
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 10,
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 8,
+  },
+  searchIcon: {
+    marginRight: 10,
+  },
+  searchInput: {
+    flex: 1,
+    padding: 10,
+  },
+  clearButton: {
+    padding: 10,
   },
 });
 

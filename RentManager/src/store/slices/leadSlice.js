@@ -16,6 +16,7 @@ const leadSlice = createSlice({
         ...action.payload,
         id: Date.now().toString(),
         createdAt: new Date().toISOString(),
+        responses: [],
       };
       state.leads.push(newLead);
     },
@@ -31,8 +32,27 @@ const leadSlice = createSlice({
     deleteLead: (state, action) => {
       state.leads = state.leads.filter(lead => lead.id !== action.payload);
     },
+    addResponse: (state, action) => {
+      const { leadId, response } = action.payload;
+      const lead = state.leads.find(lead => lead.id === leadId);
+      if (lead) {
+        lead.responses = lead.responses || [];
+        lead.responses.push({
+          text: response,
+          timestamp: new Date().toISOString(),
+        });
+      }
+    },
+    rescheduleAlert: (state, action) => {
+      const { leadId, newAlertTime, notificationId } = action.payload;
+      const lead = state.leads.find(lead => lead.id === leadId);
+      if (lead) {
+        lead.alertTime = newAlertTime;
+        lead.notificationId = notificationId;
+      }
+    },
   },
 });
 
-export const { addLead, updateLead, deleteLead } = leadSlice.actions;
+export const { addLead, updateLead, deleteLead, addResponse, rescheduleAlert } = leadSlice.actions;
 export default leadSlice.reducer; 
