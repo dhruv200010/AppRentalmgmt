@@ -539,21 +539,36 @@ const DashboardScreen = ({ navigation }) => {
   const handleDateChange = (event, selectedDate) => {
     setShowDatePicker(false);
     if (selectedDate) {
-      const newDate = new Date(rescheduleDate);
-      newDate.setFullYear(selectedDate.getFullYear());
-      newDate.setMonth(selectedDate.getMonth());
-      newDate.setDate(selectedDate.getDate());
-      setRescheduleDate(newDate);
+      if (showReschedulePicker) {
+        const newDate = new Date(rescheduleDate);
+        newDate.setFullYear(selectedDate.getFullYear());
+        newDate.setMonth(selectedDate.getMonth());
+        newDate.setDate(selectedDate.getDate());
+        setRescheduleDate(newDate);
+      } else {
+        const newDate = new Date(alertTime);
+        newDate.setFullYear(selectedDate.getFullYear());
+        newDate.setMonth(selectedDate.getMonth());
+        newDate.setDate(selectedDate.getDate());
+        setAlertTime(newDate);
+      }
     }
   };
 
   const handleTimeChange = (event, selectedTime) => {
     setShowTimePicker(false);
     if (selectedTime) {
-      const newDate = new Date(rescheduleDate);
-      newDate.setHours(selectedTime.getHours());
-      newDate.setMinutes(selectedTime.getMinutes());
-      setRescheduleDate(newDate);
+      if (showReschedulePicker) {
+        const newDate = new Date(rescheduleDate);
+        newDate.setHours(selectedTime.getHours());
+        newDate.setMinutes(selectedTime.getMinutes());
+        setRescheduleDate(newDate);
+      } else {
+        const newDate = new Date(alertTime);
+        newDate.setHours(selectedTime.getHours());
+        newDate.setMinutes(selectedTime.getMinutes());
+        setAlertTime(newDate);
+      }
     }
   };
 
