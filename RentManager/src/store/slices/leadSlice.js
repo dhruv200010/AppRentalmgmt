@@ -56,8 +56,15 @@ const leadSlice = createSlice({
         state.leads = updatedLeads;
       }
     },
+    deleteResponse: (state, action) => {
+      const { leadId, responseIndex } = action.payload;
+      const lead = state.leads.find(lead => lead.id === leadId);
+      if (lead && lead.responses) {
+        lead.responses.splice(responseIndex, 1);
+      }
+    },
   },
 });
 
-export const { addLead, updateLead, deleteLead, addResponse, rescheduleAlert } = leadSlice.actions;
+export const { addLead, updateLead, deleteLead, addResponse, rescheduleAlert, deleteResponse } = leadSlice.actions;
 export default leadSlice.reducer; 

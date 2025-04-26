@@ -17,7 +17,7 @@ import {
 } from 'react-native';
 import { useSelector, useDispatch } from 'react-redux';
 import { deleteProperty, addProperty } from '../store/slices/propertySlice';
-import { addLead, updateLead, deleteLead, addResponse, rescheduleAlert } from '../store/slices/leadSlice';
+import { addLead, updateLead, deleteLead, addResponse, rescheduleAlert, deleteResponse } from '../store/slices/leadSlice';
 import { Picker } from '@react-native-picker/picker';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
@@ -972,6 +972,43 @@ const DashboardScreen = ({ navigation }) => {
     setShowResponsesDialog(true);
   };
 
+  const handleDeleteResponse = (leadId, responseIndex) => {
+    Alert.alert(
+      'Delete Response',
+      'Are you sure you want to delete this response?',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel'
+        },
+        {
+          text: 'Delete',
+          onPress: () => {
+            // Update the local state first
+            if (selectedLeadResponses) {
+              const updatedResponses = [...selectedLeadResponses.responses];
+              updatedResponses.splice(responseIndex, 1);
+              setSelectedLeadResponses({
+                ...selectedLeadResponses,
+                responses: updatedResponses
+              });
+            }
+            
+            // Then dispatch the Redux action
+            dispatch(deleteResponse({ leadId, responseIndex }));
+            
+            if (Platform.OS === 'android') {
+              ToastAndroid.show('Response deleted', ToastAndroid.SHORT);
+            } else {
+              Alert.alert('', 'Response deleted', [{ text: 'OK' }]);
+            }
+          },
+          style: 'destructive'
+        }
+      ]
+    );
+  };
+
   const renderLead = ({ item }) => {
     const swipeX = new Animated.Value(0);
 
@@ -1559,19 +1596,30 @@ const DashboardScreen = ({ navigation }) => {
             <ScrollView style={styles.dialogResponses}>
               {selectedLeadResponses?.responses && [...selectedLeadResponses.responses]
                 .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
-                .map((response, index) => (
-                  <View key={index} style={styles.dialogResponseItem}>
-                    <Text style={styles.dialogResponseText}>{response.text}</Text>
-                    <Text style={styles.dialogResponseTime}>
-                      {new Date(response.timestamp).toLocaleString([], {
-                        day: 'numeric',
-                        month: 'short',
-                        hour: '2-digit',
-                        minute: '2-digit'
-                      })}
-                    </Text>
-                  </View>
-                ))}
+                .map((response, index) => {
+                  // Calculate the original index in the unsorted array
+                  const originalIndex = selectedLeadResponses.responses.findIndex(r => 
+                    r.timestamp === response.timestamp && r.text === response.text
+                  );
+                  return (
+                    <TouchableOpacity
+                      key={index}
+                      style={styles.dialogResponseItem}
+                      onLongPress={() => handleDeleteResponse(selectedLeadResponses.id, originalIndex)}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={styles.dialogResponseText}>{response.text}</Text>
+                      <Text style={styles.dialogResponseTime}>
+                        {new Date(response.timestamp).toLocaleString([], {
+                          day: 'numeric',
+                          month: 'short',
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        })}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
             </ScrollView>
           </View>
         </View>
