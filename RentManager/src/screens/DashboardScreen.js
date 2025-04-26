@@ -1490,56 +1490,66 @@ const DashboardScreen = ({ navigation }) => {
               {editingLead ? 'Edit Lead' : 'Add Lead'}
             </Text>
 
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Name</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Enter name"
-                value={leadName}
-                onChangeText={setLeadName}
-              />
-            </View>
-
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Contact Number</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Enter contact number"
-                value={contactNo}
-                onChangeText={setContactNo}
-                keyboardType="phone-pad"
-              />
-            </View>
-
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Source</Text>
-              <View style={styles.pickerContainer}>
-                <Picker
-                  selectedValue={source}
-                  onValueChange={setSource}
-                  style={styles.picker}
-                >
-                  <Picker.Item label="Select Source" value="" />
-                  {sources.map((src) => (
-                    <Picker.Item key={src} label={src} value={src} />
-                  ))}
-                </Picker>
+            <View style={styles.inputRow}>
+              <View style={[styles.inputGroup, { flex: 1, marginRight: 8 }]}>
+                <Text style={styles.inputLabel}>Name</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Enter name"
+                  value={leadName}
+                  onChangeText={setLeadName}
+                />
+              </View>
+              <View style={[styles.inputGroup, { flex: 1, marginLeft: 8 }]}>
+                <Text style={styles.inputLabel}>Contact</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Enter contact"
+                  value={contactNo}
+                  onChangeText={setContactNo}
+                  keyboardType="phone-pad"
+                />
               </View>
             </View>
 
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Category</Text>
-              <View style={styles.pickerContainer}>
-                <Picker
-                  selectedValue={category}
-                  onValueChange={setCategory}
-                  style={styles.picker}
-                >
-                  <Picker.Item label="Select Category" value="" />
-                  {categories.map((cat) => (
-                    <Picker.Item key={cat} label={cat} value={cat} />
-                  ))}
-                </Picker>
+            <View style={styles.inputRow}>
+              <View style={[styles.inputGroup, { flex: 1, marginRight: 8 }]}>
+                <Text style={styles.inputLabel}>Source</Text>
+                <View style={styles.pickerContainer}>
+                  <Picker
+                    selectedValue={source}
+                    onValueChange={setSource}
+                    style={styles.picker}
+                    itemStyle={{ fontSize: 14, height: 55 }}
+                  >
+                    <Picker.Item label="Select Source" value="" />
+                    {sources.map((src) => (
+                      <Picker.Item 
+                        key={src} 
+                        label={src.split(' ')
+                          .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+                          .join(' ')} 
+                        value={src} 
+                      />
+                    ))}
+                  </Picker>
+                </View>
+              </View>
+              <View style={[styles.inputGroup, { flex: 1, marginLeft: 8 }]}>
+                <Text style={styles.inputLabel}>Category</Text>
+                <View style={styles.pickerContainer}>
+                  <Picker
+                    selectedValue={category}
+                    onValueChange={setCategory}
+                    style={styles.picker}
+                    itemStyle={{ fontSize: 14, height: 55 }}
+                  >
+                    <Picker.Item label="Select Category" value="" />
+                    {categories.map((cat) => (
+                      <Picker.Item key={cat} label={cat} value={cat} />
+                    ))}
+                  </Picker>
+                </View>
               </View>
             </View>
 
@@ -1550,6 +1560,7 @@ const DashboardScreen = ({ navigation }) => {
                   selectedValue={location}
                   onValueChange={setLocation}
                   style={styles.picker}
+                  itemStyle={{ fontSize: 14, height: 55 }}
                 >
                   <Picker.Item label="Select Location" value="" />
                   {locations.map((loc) => (
@@ -1559,36 +1570,71 @@ const DashboardScreen = ({ navigation }) => {
               </View>
             </View>
 
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Alert Time</Text>
-              <View style={styles.dateTimeContainer}>
-                <TouchableOpacity
-                  style={styles.dateButton}
-                  onPress={() => showPicker('date')}
-                >
-                  <Text style={styles.dateButtonText}>
-                    {alertTime.toLocaleDateString()}
-                  </Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={styles.dateButton}
-                  onPress={() => showPicker('time')}
-                >
-                  <Text style={styles.dateButtonText}>
-                    {alertTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                  </Text>
-                </TouchableOpacity>
-              </View>
+            <View style={styles.dateTimeContainer}>
+              <TouchableOpacity
+                style={styles.dateButton}
+                onPress={() => {
+                  setPickerMode('date');
+                  if (Platform.OS === 'android') {
+                    setShowDatePicker(true);
+                    setShowTimePicker(false);
+                  } else {
+                    setShowDateTimePicker(true);
+                  }
+                }}
+              >
+                <Text style={styles.dateButtonText}>
+                  {alertTime.toLocaleDateString()}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.dateButton}
+                onPress={() => {
+                  setPickerMode('time');
+                  if (Platform.OS === 'android') {
+                    setShowTimePicker(true);
+                    setShowDatePicker(false);
+                  } else {
+                    setShowDateTimePicker(true);
+                  }
+                }}
+              >
+                <Text style={styles.dateButtonText}>
+                  {alertTime.toLocaleTimeString([], {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  })}
+                </Text>
+              </TouchableOpacity>
             </View>
 
-            {(showDatePicker || showTimePicker) && (
+            {(showDatePicker || showTimePicker) && Platform.OS === 'android' && (
               <DateTimePicker
                 value={alertTime}
                 mode={pickerMode}
                 is24Hour={true}
                 display="default"
-                onChange={pickerMode === 'date' ? handleDateChange : handleTimeChange}
+                onChange={(event, selectedDate) => {
+                  setShowDatePicker(false);
+                  setShowTimePicker(false);
+                  if (selectedDate) {
+                    setAlertTime(selectedDate);
+                  }
+                }}
+              />
+            )}
+
+            {showDateTimePicker && Platform.OS === 'ios' && (
+              <DateTimePicker
+                value={alertTime}
+                mode={pickerMode}
+                display="spinner"
+                onChange={(event, selectedDate) => {
+                  if (selectedDate) {
+                    setAlertTime(selectedDate);
+                  }
+                  setShowDateTimePicker(false);
+                }}
               />
             )}
 
@@ -1886,75 +1932,73 @@ const styles = StyleSheet.create({
   },
   modalContent: {
     backgroundColor: 'white',
-    padding: 20,
+    padding: 15,
     borderRadius: 10,
     width: '90%',
     maxWidth: 400,
   },
   modalTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: 'bold',
-    marginBottom: 20,
+    marginBottom: 15,
     textAlign: 'center',
   },
   inputGroup: {
-    marginBottom: 15,
+    marginBottom: 12,
   },
   inputLabel: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '500',
-    marginBottom: 8,
+    marginBottom: 4,
     color: '#333',
   },
   input: {
     borderWidth: 1,
     borderColor: '#ddd',
-    padding: 12,
-    borderRadius: 8,
-    fontSize: 16,
+    padding: 8,
+    borderRadius: 6,
+    fontSize: 14,
   },
   pickerContainer: {
     borderWidth: 1,
     borderColor: '#ddd',
-    borderRadius: 8,
-    marginBottom: 15,
-  },
-  pickerLabel: {
-    fontSize: 16,
-    fontWeight: '500',
-    marginBottom: 8,
-    color: '#333',
+    borderRadius: 6,
+    marginBottom: 12,
+    overflow: 'hidden',
+    backgroundColor: '#fff',
   },
   picker: {
-    height: 50,
+    height: 55,
+    width: '100%',
+    marginVertical: -8,
   },
   dateTimeContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 15,
+    marginBottom: 12,
   },
   dateButton: {
     flex: 1,
     backgroundColor: '#f0f0f0',
-    padding: 12,
-    borderRadius: 8,
-    marginHorizontal: 5,
+    padding: 8,
+    borderRadius: 6,
+    marginHorizontal: 4,
     alignItems: 'center',
   },
   dateButtonText: {
-    fontSize: 16,
+    fontSize: 14,
     color: '#333',
   },
   modalButtons: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    gap: 10,
-    marginTop: 10,
+    gap: 8,
+    marginTop: 8,
   },
   button: {
     flex: 1,
-    padding: 15,
-    borderRadius: 8,
+    padding: 12,
+    borderRadius: 6,
     alignItems: 'center',
   },
   cancelButton: {
@@ -1966,7 +2010,7 @@ const styles = StyleSheet.create({
   buttonText: {
     color: 'white',
     fontWeight: 'bold',
-    fontSize: 16,
+    fontSize: 14,
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -2287,27 +2331,27 @@ const styles = StyleSheet.create({
     padding: 10,
   },
   photoUploadContainer: {
-    marginBottom: 15,
+    marginBottom: 12,
   },
   photoUploadButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 10,
+    padding: 8,
     borderWidth: 1,
     borderColor: '#007AFF',
-    borderRadius: 5,
+    borderRadius: 6,
     borderStyle: 'dashed',
   },
   photoUploadText: {
-    marginLeft: 10,
+    marginLeft: 8,
     color: '#007AFF',
-    fontSize: 16,
+    fontSize: 14,
   },
   photoPreview: {
-    width: 100,
-    height: 100,
-    borderRadius: 5,
-    marginTop: 10,
+    width: 60,
+    height: 60,
+    borderRadius: 6,
+    marginTop: 8,
     alignSelf: 'center',
   },
   leadPhoto: {
@@ -2363,6 +2407,11 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  inputRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 12,
   },
 });
 
