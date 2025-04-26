@@ -45,10 +45,15 @@ const leadSlice = createSlice({
     },
     rescheduleAlert: (state, action) => {
       const { leadId, newAlertTime, notificationId } = action.payload;
-      const lead = state.leads.find(lead => lead.id === leadId);
-      if (lead) {
-        lead.alertTime = newAlertTime;
-        lead.notificationId = notificationId;
+      const index = state.leads.findIndex(lead => lead.id === leadId);
+      if (index !== -1) {
+        const updatedLeads = [...state.leads];
+        updatedLeads[index] = {
+          ...updatedLeads[index],
+          alertTime: newAlertTime,
+          notificationId: notificationId
+        };
+        state.leads = updatedLeads;
       }
     },
   },

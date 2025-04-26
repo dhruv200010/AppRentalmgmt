@@ -477,15 +477,75 @@ const DashboardScreen = ({ navigation }) => {
     lead.location.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const handleAddResponse = (leadId) => {
+  const handleAddResponse = async (leadId) => {
     if (!responseText.trim()) {
       Alert.alert('Error', 'Please enter a response');
       return;
     }
 
-    dispatch(addResponse({ leadId, response: responseText.trim() }));
-    setResponseText('');
-    setShowResponseInput(null);
+    try {
+      console.log('Starting handleAddResponse for lead:', leadId);
+      
+      // Get the lead from Redux store
+      const lead = leads.find(l => l.id === leadId);
+      if (!lead) {
+        console.error('Lead not found:', leadId);
+        Alert.alert('Error', 'Lead not found');
+        return;
+      }
+
+      console.log('Current lead data:', lead);
+      console.log('Current alert time:', lead.alertTime);
+
+      // Calculate new alert time (1 day from now at 10 AM)
+      const newAlertTime = new Date();
+      newAlertTime.setDate(newAlertTime.getDate() + 1);
+      newAlertTime.setHours(10, 0, 0, 0);
+      console.log('New alert time:', newAlertTime.toISOString());
+
+      // Cancel existing notification if it exists
+      if (lead.notificationId) {
+        console.log('Canceling existing notification:', lead.notificationId);
+        await cancelNotification(lead.notificationId);
+      }
+
+      // Schedule new notification
+      console.log('Scheduling new notification...');
+      const notificationId = await scheduleNotification(
+        { ...lead, alertTime: newAlertTime.toISOString() },
+        leadId
+      );
+      console.log('New notification scheduled with ID:', notificationId);
+
+      // Update lead with new response and alert time
+      console.log('Dispatching updates...');
+      dispatch(addResponse({ leadId, response: responseText.trim() }));
+      dispatch(rescheduleAlert({ 
+        leadId, 
+        newAlertTime: newAlertTime.toISOString(),
+        notificationId 
+      }));
+
+      // Clear the response input and close the input box
+      setResponseText('');
+      setShowResponseInput(null);
+
+      // Show success message
+      if (Platform.OS === 'android') {
+        ToastAndroid.show('Response added and alert rescheduled', ToastAndroid.SHORT);
+      } else {
+        Alert.alert('Success', 'Response added and alert rescheduled');
+      }
+
+      console.log('handleAddResponse completed successfully');
+    } catch (error) {
+      console.error('Error in handleAddResponse:', error);
+      console.error('Error details:', {
+        message: error.message,
+        stack: error.stack,
+      });
+      Alert.alert('Error', 'Failed to add response. Please try again.');
+    }
   };
 
   const handleReschedule = async (lead) => {
