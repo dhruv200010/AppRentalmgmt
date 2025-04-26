@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -14,6 +14,8 @@ import {
   PanResponder,
   Linking,
   ToastAndroid,
+  Image,
+  Dimensions,
 } from 'react-native';
 import { useSelector, useDispatch } from 'react-redux';
 import { deleteProperty, addProperty } from '../store/slices/propertySlice';
@@ -23,6 +25,8 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import * as Notifications from 'expo-notifications';
 import * as Clipboard from 'expo-clipboard';
+import * as ImagePicker from 'expo-image-picker';
+import { PinchGestureHandler, State, GestureHandlerRootView } from 'react-native-gesture-handler';
 
 // Configure notifications
 Notifications.setNotificationHandler({
@@ -78,6 +82,12 @@ const DashboardScreen = ({ navigation }) => {
   const [showDateTimePicker, setShowDateTimePicker] = useState(false);
   const [showResponsesDialog, setShowResponsesDialog] = useState(false);
   const [selectedLeadResponses, setSelectedLeadResponses] = useState(null);
+  const [selectedPhoto, setSelectedPhoto] = useState(null);
+  const [showPhotoPreview, setShowPhotoPreview] = useState(false);
+  const [previewPhoto, setPreviewPhoto] = useState(null);
+  const scale = useRef(new Animated.Value(1)).current;
+  const lastScale = useRef(1);
+  const pinchRef = useRef(null);
 
   const handleAddProperty = () => {
     if (!propertyName.trim()) {
@@ -368,7 +378,6 @@ const DashboardScreen = ({ navigation }) => {
     try {
       console.log('Adding new lead...');
       
-      // Set default date to 2 days later at 10 AM if not already set
       const defaultDate = new Date();
       defaultDate.setDate(defaultDate.getDate() + 2);
       defaultDate.setHours(10, 0, 0, 0);
@@ -380,6 +389,7 @@ const DashboardScreen = ({ navigation }) => {
         category: category || 'Follow up with',
         location: location || '',
         alertTime: alertTime ? alertTime.toISOString() : defaultDate.toISOString(),
+        photo: selectedPhoto,
       };
 
       console.log('Lead data to be saved:', leadData);
@@ -412,6 +422,7 @@ const DashboardScreen = ({ navigation }) => {
     setCategory(lead.category);
     setLocation(lead.location);
     setAlertTime(new Date(lead.alertTime));
+    setSelectedPhoto(lead.photo);
     setLeadModalVisible(true);
   };
 
@@ -463,7 +474,7 @@ const DashboardScreen = ({ navigation }) => {
     setSource('');
     setCategory('');
     setLocation('');
-    // Set default date to 2 days later at 10 AM
+    setSelectedPhoto(null);
     const defaultDate = new Date();
     defaultDate.setDate(defaultDate.getDate() + 2);
     defaultDate.setHours(10, 0, 0, 0);
@@ -791,7 +802,7 @@ const DashboardScreen = ({ navigation }) => {
   };
 
   const handleChatSubmit = async () => {
-    if (!chatMessage.trim()) return;
+    if (!chatMessage.trim() && !selectedPhoto) return;
 
     console.log('\n=== Starting chat message processing ===');
     console.log('Original message:', chatMessage);
@@ -831,6 +842,7 @@ const DashboardScreen = ({ navigation }) => {
       category: parsedData.category,
       location: parsedData.location || '',
       alertTime: localDateString,
+      photo: selectedPhoto,
     };
 
     console.log('Lead data to be created:', leadData);
@@ -850,6 +862,7 @@ const DashboardScreen = ({ navigation }) => {
       dispatch(addLead({ ...leadData, id: tempId, notificationId }));
 
       setChatMessage('');
+      setSelectedPhoto(null);
       setShowChatBox(false);
       console.log('=== Chat message processing completed ===\n');
     } catch (error) {
@@ -1128,6 +1141,20 @@ const DashboardScreen = ({ navigation }) => {
                 </Text>
               </View>
             </View>
+            {item.photo && (
+              <TouchableOpacity
+                onPress={() => {
+                  setPreviewPhoto(item.photo);
+                  setShowPhotoPreview(true);
+                }}
+              >
+                <Image
+                  source={{ uri: item.photo }}
+                  style={styles.leadPhoto}
+                  resizeMode="cover"
+                />
+              </TouchableOpacity>
+            )}
           </TouchableOpacity>
 
           {/* Response Section - Show only latest response */}
@@ -1211,6 +1238,83 @@ const DashboardScreen = ({ navigation }) => {
     );
   };
 
+  const renderPhotoPreviewModal = () => (
+    <Modal
+      visible={showPhotoPreview}
+      transparent={true}
+      animationType="fade"
+      onRequestClose={() => {
+        setShowPhotoPreview(false);
+        scale.setValue(1);
+        lastScale.current = 1;
+      }}
+    >
+      <GestureHandlerRootView style={styles.photoPreviewModal}>
+        <TouchableOpacity
+          style={styles.closePhotoPreview}
+          onPress={() => {
+            setShowPhotoPreview(false);
+            scale.setValue(1);
+            lastScale.current = 1;
+          }}
+        >
+          <Icon name="close" size={24} color="white" />
+        </TouchableOpacity>
+        <PinchGestureHandler
+          ref={pinchRef}
+          onGestureEvent={Animated.event(
+            [{ nativeEvent: { scale: scale } }],
+            { useNativeDriver: true }
+          )}
+          onHandlerStateChange={event => {
+            if (event.nativeEvent.oldState === State.ACTIVE) {
+              const newScale = lastScale.current * event.nativeEvent.scale;
+              lastScale.current = Math.min(Math.max(newScale, 1), 5);
+              scale.setValue(lastScale.current);
+            }
+          }}
+        >
+          <Animated.View style={styles.zoomContainer}>
+            <Animated.Image
+              source={{ uri: previewPhoto }}
+              style={[
+                styles.fullPhoto,
+                {
+                  transform: [{ scale: scale }]
+                }
+              ]}
+              resizeMode="contain"
+            />
+          </Animated.View>
+        </PinchGestureHandler>
+      </GestureHandlerRootView>
+    </Modal>
+  );
+
+  // Add photo picker function
+  const pickImage = async () => {
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Sorry, we need camera roll permissions to make this work!');
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: false, // Disable cropping/editing
+        quality: 0.8,
+      });
+
+      if (!result.canceled) {
+        setSelectedPhoto(result.assets[0].uri);
+      }
+    } catch (error) {
+      console.error('Error picking image:', error);
+      Alert.alert('Error', 'Failed to pick image. Please try again.');
+    }
+  };
+
   return (
     <View style={styles.container}>
       <View style={styles.contentContainer}>
@@ -1234,13 +1338,36 @@ const DashboardScreen = ({ navigation }) => {
 
             {showChatBox && (
               <View style={styles.chatBox}>
-                <TextInput
-                  style={styles.chatInput}
-                  placeholder="Type your alert message (e.g., 'call Justin tomorrow 8pm')"
-                  value={chatMessage}
-                  onChangeText={setChatMessage}
-                  multiline
-                />
+                <View style={styles.chatInputContainer}>
+                  <TextInput
+                    style={styles.chatInput}
+                    placeholder="Type your alert message (e.g., 'call Justin tomorrow 8pm')"
+                    value={chatMessage}
+                    onChangeText={setChatMessage}
+                    multiline
+                  />
+                  <TouchableOpacity
+                    style={styles.photoButton}
+                    onPress={pickImage}
+                  >
+                    <Icon name="paperclip" size={22} color="#666" />
+                  </TouchableOpacity>
+                </View>
+                {selectedPhoto && (
+                  <View style={styles.selectedPhotoContainer}>
+                    <Image
+                      source={{ uri: selectedPhoto }}
+                      style={styles.selectedPhoto}
+                      resizeMode="cover"
+                    />
+                    <TouchableOpacity
+                      style={styles.removePhotoButton}
+                      onPress={() => setSelectedPhoto(null)}
+                    >
+                      <Icon name="close" size={18} color="white" />
+                    </TouchableOpacity>
+                  </View>
+                )}
                 <TouchableOpacity
                   style={styles.chatSubmitButton}
                   onPress={handleChatSubmit}
@@ -1385,7 +1512,7 @@ const DashboardScreen = ({ navigation }) => {
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.pickerLabel}>Source</Text>
+              <Text style={styles.inputLabel}>Source</Text>
               <View style={styles.pickerContainer}>
                 <Picker
                   selectedValue={source}
@@ -1401,7 +1528,7 @@ const DashboardScreen = ({ navigation }) => {
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.pickerLabel}>Category</Text>
+              <Text style={styles.inputLabel}>Category</Text>
               <View style={styles.pickerContainer}>
                 <Picker
                   selectedValue={category}
@@ -1417,7 +1544,7 @@ const DashboardScreen = ({ navigation }) => {
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.pickerLabel}>Location</Text>
+              <Text style={styles.inputLabel}>Location</Text>
               <View style={styles.pickerContainer}>
                 <Picker
                   selectedValue={location}
@@ -1464,6 +1591,25 @@ const DashboardScreen = ({ navigation }) => {
                 onChange={pickerMode === 'date' ? handleDateChange : handleTimeChange}
               />
             )}
+
+            <View style={styles.photoUploadContainer}>
+              <TouchableOpacity
+                style={styles.photoUploadButton}
+                onPress={pickImage}
+              >
+                <Icon name="camera" size={24} color="#007AFF" />
+                <Text style={styles.photoUploadText}>
+                  {selectedPhoto ? 'Change Photo' : 'Add Photo'}
+                </Text>
+              </TouchableOpacity>
+              {selectedPhoto && (
+                <Image
+                  source={{ uri: selectedPhoto }}
+                  style={styles.photoPreview}
+                  resizeMode="cover"
+                />
+              )}
+            </View>
 
             <View style={styles.modalButtons}>
               <TouchableOpacity
@@ -1624,6 +1770,7 @@ const DashboardScreen = ({ navigation }) => {
           </View>
         </View>
       </Modal>
+      {renderPhotoPreviewModal()}
     </View>
   );
 };
@@ -1984,13 +2131,45 @@ const styles = StyleSheet.create({
     shadowRadius: 3.84,
     elevation: 5,
   },
-  chatInput: {
+  chatInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
     borderWidth: 1,
     borderColor: '#ddd',
     borderRadius: 8,
+    marginBottom: 10,
+  },
+  chatInput: {
+    flex: 1,
     padding: 10,
     minHeight: 60,
+  },
+  photoButton: {
+    padding: 12,
+    borderLeftWidth: 1,
+    borderLeftColor: '#ddd',
+    opacity: 0.8,
+  },
+  selectedPhotoContainer: {
+    position: 'relative',
     marginBottom: 10,
+    alignSelf: 'flex-start',
+  },
+  selectedPhoto: {
+    width: 60,
+    height: 60,
+    borderRadius: 8,
+  },
+  removePhotoButton: {
+    position: 'absolute',
+    top: -8,
+    right: -8,
+    backgroundColor: '#FF3B30',
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   chatSubmitButton: {
     backgroundColor: '#007AFF',
@@ -2106,6 +2285,84 @@ const styles = StyleSheet.create({
   },
   clearButton: {
     padding: 10,
+  },
+  photoUploadContainer: {
+    marginBottom: 15,
+  },
+  photoUploadButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 10,
+    borderWidth: 1,
+    borderColor: '#007AFF',
+    borderRadius: 5,
+    borderStyle: 'dashed',
+  },
+  photoUploadText: {
+    marginLeft: 10,
+    color: '#007AFF',
+    fontSize: 16,
+  },
+  photoPreview: {
+    width: 100,
+    height: 100,
+    borderRadius: 5,
+    marginTop: 10,
+    alignSelf: 'center',
+  },
+  leadPhoto: {
+    width: 60,
+    height: 60,
+    borderRadius: 5,
+    marginLeft: 10,
+  },
+  photoPreviewModal: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.9)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  closePhotoPreview: {
+    position: 'absolute',
+    top: 40,
+    right: 20,
+    zIndex: 1,
+    padding: 10,
+  },
+  zoomContainer: {
+    flex: 1,
+    width: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  fullPhoto: {
+    width: Dimensions.get('window').width,
+    height: Dimensions.get('window').height * 0.8,
+  },
+  chatActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  selectedPhotoContainer: {
+    position: 'relative',
+    marginRight: 10,
+  },
+  selectedPhoto: {
+    width: 40,
+    height: 40,
+    borderRadius: 8,
+  },
+  removePhotoButton: {
+    position: 'absolute',
+    top: -8,
+    right: -8,
+    backgroundColor: '#FF3B30',
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });
 

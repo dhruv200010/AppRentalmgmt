@@ -17,6 +17,7 @@ const leadSlice = createSlice({
         id: Date.now().toString(),
         createdAt: new Date().toISOString(),
         responses: [],
+        photo: action.payload.photo || null,
       };
       state.leads.push(newLead);
     },
@@ -26,6 +27,7 @@ const leadSlice = createSlice({
         state.leads[index] = {
           ...state.leads[index],
           ...action.payload,
+          photo: action.payload.photo || state.leads[index].photo,
         };
       }
     },
