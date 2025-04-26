@@ -1380,6 +1380,33 @@ const DashboardScreen = ({ navigation }) => {
     }
   };
 
+  const handleQuickTimeSelect = (option) => {
+    const now = new Date();
+    let newDate = new Date(now);
+
+    switch (option) {
+      case 'evening':
+        newDate.setHours(17, 30, 0, 0);
+        break;
+      case 'tomorrow':
+        newDate.setDate(now.getDate() + 1);
+        newDate.setHours(10, 0, 0, 0);
+        break;
+      case 'after2days':
+        newDate.setDate(now.getDate() + 2);
+        newDate.setHours(10, 0, 0, 0);
+        break;
+      case 'nextweek':
+        newDate.setDate(now.getDate() + 7);
+        newDate.setHours(10, 0, 0, 0);
+        break;
+    }
+
+    setRescheduleDate(newDate);
+    setShowDatePicker(false);
+    setShowTimePicker(false);
+  };
+
   return (
     <View style={styles.container}>
       <View style={styles.contentContainer}>
@@ -1759,6 +1786,33 @@ const DashboardScreen = ({ navigation }) => {
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Reschedule Alert</Text>
             
+            <View style={styles.quickTimeOptions}>
+              <TouchableOpacity
+                style={styles.quickTimeButton}
+                onPress={() => handleQuickTimeSelect('evening')}
+              >
+                <Text style={styles.quickTimeText}>Evening (5:30 PM)</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.quickTimeButton}
+                onPress={() => handleQuickTimeSelect('tomorrow')}
+              >
+                <Text style={styles.quickTimeText}>Tomorrow (10 AM)</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.quickTimeButton}
+                onPress={() => handleQuickTimeSelect('after2days')}
+              >
+                <Text style={styles.quickTimeText}>After 2 Days (10 AM)</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.quickTimeButton}
+                onPress={() => handleQuickTimeSelect('nextweek')}
+              >
+                <Text style={styles.quickTimeText}>Next Week (10 AM)</Text>
+              </TouchableOpacity>
+            </View>
+
             <View style={styles.dateTimeContainer}>
               <TouchableOpacity
                 style={styles.dateButton}
@@ -2477,6 +2531,26 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     marginBottom: 12,
+  },
+  quickTimeOptions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    marginBottom: 15,
+    paddingHorizontal: 10,
+  },
+  quickTimeButton: {
+    backgroundColor: '#f0f0f0',
+    padding: 10,
+    borderRadius: 8,
+    marginBottom: 10,
+    width: '48%',
+    alignItems: 'center',
+  },
+  quickTimeText: {
+    color: '#007AFF',
+    fontSize: 14,
+    textAlign: 'center',
   },
 });
 
