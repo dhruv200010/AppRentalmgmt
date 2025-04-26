@@ -665,8 +665,8 @@ const DashboardScreen = ({ navigation }) => {
     console.log('Starting message parsing...');
     console.log('Original message:', message);
 
-    const timeRegex = /(?:^|\s)(\d{1,2})(?::(\d{2}))?\s*(am|pm)(?:\s|$)/i;
-    const callRegex = /(?:to\s+)?call\s+([a-zA-Z]+)/i;
+    const timeRegex = /(?:^|\s)(\d{1,2})(?:[:.](\d{2}))?\s*(am|pm)(?:\s|$)/i;
+    const callRegex = /(?:to\s+)?call\s+(?:with\s+)?([a-zA-Z]+)/i;
     const todayRegex = /today/i;
     const phoneRegex = /(?:\+?(\d{1,3}))?[-. (]*(\d{3})[-. )]*(\d{3})[-. ]*(\d{4})(?: *x\d+)?/;
     const hashtagRegex = /#(\w+)/g;
@@ -722,6 +722,24 @@ const DashboardScreen = ({ navigation }) => {
           continue;
         }
       }
+
+      // Check for categories without hashtags
+      for (const cat of categories) {
+        if (remainingText.toLowerCase().includes(cat.toLowerCase())) {
+          category = cat;
+          remainingText = remainingText.replace(new RegExp(cat, 'i'), '').trim();
+          break;
+        }
+      }
+      
+      // Check for sources without hashtags
+      for (const src of sources) {
+        if (remainingText.toLowerCase().includes(src.toLowerCase())) {
+          source = src;
+          remainingText = remainingText.replace(new RegExp(src, 'i'), '').trim();
+          break;
+        }
+      }
       
       // Clean up the remaining text for the name
       name = remainingText
@@ -768,11 +786,58 @@ const DashboardScreen = ({ navigation }) => {
       console.log('Time specified, final date:', date.toLocaleString());
     }
 
-    // Extract name
+    // Extract name and category from call pattern
     const nameMatch = message.match(callRegex);
     if (nameMatch) {
       name = nameMatch[1];
+      category = 'Call';
       console.log('Name extracted:', name);
+      console.log('Category set to Call');
+    }
+
+    // Process the message to extract sources and categories
+    let processedMessage = message;
+    
+    // Check for category patterns
+    const categoryPatterns = [
+      { pattern: /call\s+(?:with\s+)?/i, category: 'Call' },
+      { pattern: /follow\s+up\s+(?:with\s+)?/i, category: 'Follow up with' },
+      { pattern: /send\s+lease\s+(?:to\s+)?/i, category: 'Send lease to' },
+      { pattern: /landed/i, category: 'landed' },
+      { pattern: /nuh-uh/i, category: 'Nuh-uh' }
+    ];
+    
+    for (const { pattern, category: cat } of categoryPatterns) {
+      if (pattern.test(processedMessage)) {
+        category = cat;
+        processedMessage = processedMessage.replace(pattern, '').trim();
+        break;
+      }
+    }
+    
+    // Check for sources anywhere in the message
+    for (const src of sources) {
+      const srcRegex = new RegExp(`\\b${src}\\b`, 'i');
+      if (srcRegex.test(processedMessage)) {
+        source = src;
+        processedMessage = processedMessage.replace(srcRegex, '').trim();
+        break;
+      }
+    }
+    
+    // Check for locations anywhere in the message
+    for (const loc of locations) {
+      const locRegex = new RegExp(`\\b${loc}\\b`, 'i');
+      if (locRegex.test(processedMessage)) {
+        location = loc;
+        processedMessage = processedMessage.replace(locRegex, '').trim();
+        break;
+      }
+    }
+
+    // If no name was extracted from call regex, use the processed message
+    if (!name) {
+      name = processedMessage.trim();
     }
 
     // If no time was specified, set default to 10 AM two days from now
