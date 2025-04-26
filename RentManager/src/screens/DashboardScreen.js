@@ -481,12 +481,29 @@ const DashboardScreen = ({ navigation }) => {
     setAlertTime(defaultDate);
   };
 
-  const filteredLeads = leads.filter(lead => 
-    lead.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    lead.contactNo.includes(searchQuery) ||
-    lead.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    lead.location.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredLeads = leads
+    .filter(lead => 
+      lead.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      lead.contactNo.includes(searchQuery) ||
+      lead.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      lead.location.toLowerCase().includes(searchQuery.toLowerCase())
+    )
+    .sort((a, b) => {
+      const dateA = new Date(a.alertTime);
+      const dateB = new Date(b.alertTime);
+      console.log('Sorting leads:', {
+        a: { name: a.name, alertTime: a.alertTime, parsed: dateA },
+        b: { name: b.name, alertTime: b.alertTime, parsed: dateB },
+        comparison: dateA - dateB
+      });
+      return dateA - dateB;  // Changed from dateB - dateA to dateA - dateB for ascending order
+    });
+
+  console.log('Sorted leads:', filteredLeads.map(lead => ({
+    name: lead.name,
+    alertTime: lead.alertTime,
+    parsed: new Date(lead.alertTime)
+  })));
 
   const handleAddResponse = async (leadId) => {
     if (!responseText.trim()) {
