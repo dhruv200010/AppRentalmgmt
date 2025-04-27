@@ -89,6 +89,7 @@ const DashboardScreen = ({ navigation }) => {
   const scale = useRef(new Animated.Value(1)).current;
   const lastScale = useRef(1);
   const pinchRef = useRef(null);
+  const [alertFilter, setAlertFilter] = useState('all'); // Add this line for alert filter state
 
   const handleAddProperty = () => {
     if (!propertyName.trim()) {
@@ -482,29 +483,36 @@ const DashboardScreen = ({ navigation }) => {
     setAlertTime(defaultDate);
   };
 
-  const filteredLeads = leads
-    .filter(lead => 
-      lead.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      lead.contactNo.includes(searchQuery) ||
-      lead.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      lead.location.toLowerCase().includes(searchQuery.toLowerCase())
-    )
-    .sort((a, b) => {
-      const dateA = new Date(a.alertTime);
-      const dateB = new Date(b.alertTime);
-      console.log('Sorting leads:', {
-        a: { name: a.name, alertTime: a.alertTime, parsed: dateA },
-        b: { name: b.name, alertTime: b.alertTime, parsed: dateB },
-        comparison: dateA - dateB
-      });
-      return dateA - dateB;  // Changed from dateB - dateA to dateA - dateB for ascending order
-    });
+  const getFilteredLeads = () => {
+    const now = new Date();
+    return leads
+      .filter(lead => {
+        // First apply the search filter
+        const matchesSearch = 
+          lead.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          lead.contactNo.includes(searchQuery) ||
+          lead.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          lead.location.toLowerCase().includes(searchQuery.toLowerCase());
 
-  console.log('Sorted leads:', filteredLeads.map(lead => ({
-    name: lead.name,
-    alertTime: lead.alertTime,
-    parsed: new Date(lead.alertTime)
-  })));
+        // Then apply the alert status filter
+        const alertTime = new Date(lead.alertTime);
+        const isTriggered = alertTime < now || completedAlerts[lead.id];
+        
+        switch (alertFilter) {
+          case 'pending':
+            return matchesSearch && !isTriggered;
+          case 'triggered':
+            return matchesSearch && isTriggered;
+          default:
+            return matchesSearch;
+        }
+      })
+      .sort((a, b) => {
+        const dateA = new Date(a.alertTime);
+        const dateB = new Date(b.alertTime);
+        return dateA - dateB;
+      });
+  };
 
   const handleAddResponse = async (leadId) => {
     if (!responseText.trim()) {
@@ -1458,6 +1466,47 @@ const DashboardScreen = ({ navigation }) => {
     setShowTimePicker(false);
   };
 
+  // Add this function before the return statement
+  const getFilterIcon = () => {
+    switch (alertFilter) {
+      case 'pending':
+        return 'clock-outline';
+      case 'triggered':
+        return 'check-circle-outline';
+      default:
+        return 'filter-variant';
+    }
+  };
+
+  // Add this function before the return statement
+  const getFilterLabel = () => {
+    switch (alertFilter) {
+      case 'pending':
+        return 'Pending Alerts';
+      case 'triggered':
+        return 'Triggered Alerts';
+      default:
+        return 'All Alerts';
+    }
+  };
+
+  // Add this function before the return statement
+  const handleFilterToggle = () => {
+    switch (alertFilter) {
+      case 'all':
+        setAlertFilter('pending');
+        break;
+      case 'pending':
+        setAlertFilter('triggered');
+        break;
+      case 'triggered':
+        setAlertFilter('all');
+        break;
+      default:
+        setAlertFilter('all');
+    }
+  };
+
   return (
     <View style={styles.container}>
       <View style={styles.contentContainer}>
@@ -1477,6 +1526,12 @@ const DashboardScreen = ({ navigation }) => {
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>Alerts</Text>
+              <TouchableOpacity 
+                style={styles.filterIconButton}
+                onPress={handleFilterToggle}
+              >
+                <Icon name={getFilterIcon()} size={24} color="#007AFF" />
+              </TouchableOpacity>
             </View>
 
             {showChatBox && (
@@ -1537,9 +1592,10 @@ const DashboardScreen = ({ navigation }) => {
                 </TouchableOpacity>
               ) : null}
             </View>
+
             <View style={styles.alertsContainer}>
               <FlatList
-                data={filteredLeads}
+                data={getFilteredLeads()}
                 renderItem={renderLead}
                 keyExtractor={(item) => item.id}
                 contentContainerStyle={styles.leadsList}
@@ -2187,6 +2243,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 15,
+    paddingHorizontal: 10,
   },
   sectionTitle: {
     fontSize: 20,
@@ -2602,6 +2659,53 @@ const styles = StyleSheet.create({
     color: '#007AFF',
     fontSize: 14,
     textAlign: 'center',
+  },
+  filterContainer: {
+    marginHorizontal: 10,
+    marginBottom: 10,
+    backgroundColor: '#f8f8f8',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    overflow: 'hidden',
+  },
+  filterPicker: {
+    height: 50,
+    width: '100%',
+    color: '#333',
+    backgroundColor: 'transparent',
+  },
+  filterIconButton: {
+    padding: 8,
+    borderRadius: 20,
+    backgroundColor: '#f0f0f0',
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  filterOption: {
+    padding: 15,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    borderRadius: 8,
+    marginBottom: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  filterOptionSelected: {
+    backgroundColor: '#E3F2FD',
+    borderColor: '#007AFF',
+  },
+  filterOptionText: {
+    fontSize: 16,
+    color: '#333',
+    flex: 1,
+  },
+  filterOptionTextSelected: {
+    color: '#007AFF',
+    fontWeight: '500',
   },
 });
 
