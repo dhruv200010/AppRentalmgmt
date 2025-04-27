@@ -9,7 +9,9 @@ import PropertyScreen from './src/screens/PropertyScreen';
 import RoomScreen from './src/screens/RoomScreen';
 import { enableScreens } from 'react-native-screens';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import 'react-native-gesture-handler';
 
+// Enable native screens for better performance
 enableScreens();
 
 const Stack = createNativeStackNavigator();
