@@ -58,6 +58,8 @@ const DashboardScreen = ({ navigation }) => {
   const [propertyModalVisible, setPropertyModalVisible] = useState(false);
   const [propertyName, setPropertyName] = useState('');
   const [completedAlerts, setCompletedAlerts] = useState({}); // Track completed alerts
+  const [archivedAlerts, setArchivedAlerts] = useState([]); // Track archived alerts
+  const [showArchived, setShowArchived] = useState(false); // Track if we're showing archived alerts
 
   // Lead modal state
   const [leadModalVisible, setLeadModalVisible] = useState(false);
@@ -484,6 +486,24 @@ const DashboardScreen = ({ navigation }) => {
   };
 
   const getFilteredLeads = () => {
+    // If showing archived alerts, return filtered archived alerts
+    if (showArchived) {
+      return archivedAlerts
+        .filter(lead => {
+          // Apply the search filter
+          return lead.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            lead.contactNo.includes(searchQuery) ||
+            lead.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            lead.location.toLowerCase().includes(searchQuery.toLowerCase());
+        })
+        .sort((a, b) => {
+          const dateA = new Date(a.alertTime);
+          const dateB = new Date(b.alertTime);
+          return dateB - dateA; // Sort by most recent first
+        });
+    }
+    
+    // Otherwise, return filtered active leads
     const now = new Date();
     return leads
       .filter(lead => {
@@ -1148,8 +1168,8 @@ const DashboardScreen = ({ navigation }) => {
       new Date(b.timestamp) - new Date(a.timestamp)
     ) : [];
 
-    // Determine if alert is completed or pending
-    const isCompleted = completedAlerts[item.id] || new Date(item.alertTime) < new Date();
+    // Determine if alert is completed or pending - only for active alerts
+    const isCompleted = showArchived ? false : (completedAlerts[item.id] || new Date(item.alertTime) < new Date());
     const statusColor = isCompleted ? '#808080' : '#4CAF50'; // gray for completed, green for pending
 
     const handleLongPress = async () => {
@@ -1185,7 +1205,7 @@ const DashboardScreen = ({ navigation }) => {
       onPanResponderRelease: (_, gestureState) => {
         if (gestureState.dx < -100) { // Swipe left more than 100 units
           Animated.timing(swipeX, {
-            toValue: -100,
+            toValue: showArchived ? -100 : -200, // Different swipe distance for archived vs active
             duration: 200,
             useNativeDriver: true,
           }).start();
@@ -1207,26 +1227,57 @@ const DashboardScreen = ({ navigation }) => {
 
     return (
       <View style={styles.leadCardContainer}>
-        <TouchableOpacity 
-          style={styles.swipeDeleteContainer}
-          onPress={() => handleDeleteLead(item.id)}
+        <Animated.View
+          style={[
+            styles.swipeActionsContainer,
+            showArchived && styles.archivedSwipeActionsContainer,
+            {
+              opacity: swipeX.interpolate({
+                inputRange: showArchived ? [-100, -50, 0] : [-200, -100, 0],
+                outputRange: [1, 0.5, 0],
+              }),
+            }
+          ]}
         >
-          <Text style={styles.swipeDeleteText}>Delete</Text>
-        </TouchableOpacity>
+          {showArchived ? (
+            <TouchableOpacity 
+              style={[styles.swipeActionButton, styles.deleteButton, styles.archivedDeleteButton]}
+              onPress={() => handleDeleteArchivedAlert(item.id)}
+            >
+              <Text style={styles.swipeActionText}>Delete</Text>
+            </TouchableOpacity>
+          ) : (
+            <>
+              <TouchableOpacity 
+                style={[styles.swipeActionButton, styles.archiveButton]}
+                onPress={() => handleArchiveAlert(item)}
+              >
+                <Text style={styles.swipeActionText}>Archive</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={[styles.swipeActionButton, styles.deleteButton]}
+                onPress={() => handleDeleteLead(item.id)}
+              >
+                <Text style={styles.swipeActionText}>Delete</Text>
+              </TouchableOpacity>
+            </>
+          )}
+        </Animated.View>
         <Animated.View
           {...panResponder.panHandlers}
           style={[
             styles.leadCard,
             {
               transform: [{ translateX: swipeX }],
-              borderLeftWidth: 4,
+              borderLeftWidth: showArchived ? 0 : 4, // Remove the colored border for archived alerts
               borderLeftColor: statusColor,
+              opacity: showArchived ? 0.8 : 1,
             },
           ]}
         >
           <TouchableOpacity 
             style={styles.leadHeader}
-            onPress={() => handleEditLead(item)}
+            onPress={() => showArchived ? null : handleEditLead(item)}
             onLongPress={handleLongPress}
             activeOpacity={0.7}
           >
@@ -1252,18 +1303,20 @@ const DashboardScreen = ({ navigation }) => {
                   </Text>
                 )}
               </View>
-              <View style={styles.leadAlert}>
-                <Icon name="bell" size={14} color="#007AFF" />
-                <Text style={{ color: '#007AFF' }}>
-                  {new Date(item.alertTime).toLocaleString([], { 
-                    year: 'numeric',
-                    month: 'numeric',
-                    day: 'numeric',
-                    hour: '2-digit',
-                    minute: '2-digit'
-                  })}
-                </Text>
-              </View>
+              {!showArchived && (
+                <View style={styles.leadAlert}>
+                  <Icon name="bell" size={14} color="#007AFF" />
+                  <Text style={{ color: '#007AFF' }}>
+                    {new Date(item.alertTime).toLocaleString([], { 
+                      year: 'numeric',
+                      month: 'numeric',
+                      day: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit'
+                    })}
+                  </Text>
+                </View>
+              )}
             </View>
             {item.photo && (
               <TouchableOpacity
@@ -1336,25 +1389,36 @@ const DashboardScreen = ({ navigation }) => {
 
           {/* Action Buttons */}
           <View style={styles.actionButtons}>
-            <TouchableOpacity
-              style={styles.iconButton}
-              onPress={() => setShowResponseInput(item.id)}
-            >
-              <Icon name="message-reply" size={24} color="#007AFF" />
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.iconButton}
-              onPress={() => handleReschedulePress(item)}
-            >
-              <Icon name="calendar-clock" size={24} color="#FF9500" />
-            </TouchableOpacity>
-            {item.contactNo && (
+            {showArchived ? (
               <TouchableOpacity
                 style={styles.iconButton}
-                onPress={() => handleCall(item.contactNo)}
+                onPress={() => handleRestoreAlert(item)}
               >
-                <Icon name="phone" size={24} color="#34C759" />
+                <Icon name="restore" size={24} color="#007AFF" />
               </TouchableOpacity>
+            ) : (
+              <>
+                <TouchableOpacity
+                  style={styles.iconButton}
+                  onPress={() => setShowResponseInput(item.id)}
+                >
+                  <Icon name="message-reply" size={24} color="#007AFF" />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.iconButton}
+                  onPress={() => handleReschedulePress(item)}
+                >
+                  <Icon name="calendar-clock" size={24} color="#FF9500" />
+                </TouchableOpacity>
+                {item.contactNo && (
+                  <TouchableOpacity
+                    style={styles.iconButton}
+                    onPress={() => handleCall(item.contactNo)}
+                  >
+                    <Icon name="phone" size={24} color="#34C759" />
+                  </TouchableOpacity>
+                )}
+              </>
             )}
           </View>
         </Animated.View>
@@ -1507,6 +1571,77 @@ const DashboardScreen = ({ navigation }) => {
     }
   };
 
+  // Add this function to handle archiving alerts
+  const handleArchiveAlert = async (lead) => {
+    try {
+      // Cancel notification if it exists
+      if (lead.notificationId) {
+        await cancelNotification(lead.notificationId);
+      }
+      
+      // Add to archived alerts
+      setArchivedAlerts(prev => [...prev, lead]);
+      
+      // Remove from active leads
+      dispatch(deleteLead(lead.id));
+      
+      // Show success message
+      if (Platform.OS === 'android') {
+        ToastAndroid.show('Alert archived', ToastAndroid.SHORT);
+      } else {
+        Alert.alert('Success', 'Alert archived');
+      }
+    } catch (error) {
+      console.error('Error archiving alert:', error);
+      Alert.alert('Error', 'Failed to archive alert. Please try again.');
+    }
+  };
+
+  // Add this function to handle restoring archived alerts
+  const handleRestoreAlert = (lead) => {
+    // Remove from archived alerts
+    setArchivedAlerts(prev => prev.filter(item => item.id !== lead.id));
+    
+    // Add back to active leads
+    dispatch(addLead(lead));
+    
+    // Show success message
+    if (Platform.OS === 'android') {
+      ToastAndroid.show('Alert restored', ToastAndroid.SHORT);
+    } else {
+      Alert.alert('Success', 'Alert restored');
+    }
+  };
+
+  // Add this function to handle deleting archived alerts
+  const handleDeleteArchivedAlert = (leadId) => {
+    Alert.alert(
+      'Delete Archived Alert',
+      'Are you sure you want to permanently delete this archived alert?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => {
+            setArchivedAlerts(prev => prev.filter(item => item.id !== leadId));
+            
+            if (Platform.OS === 'android') {
+              ToastAndroid.show('Alert deleted', ToastAndroid.SHORT);
+            } else {
+              Alert.alert('Success', 'Alert deleted');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  // Add this function to toggle between active and archived alerts
+  const toggleArchivedView = () => {
+    setShowArchived(!showArchived);
+  };
+
   return (
     <View style={styles.container}>
       <View style={styles.contentContainer}>
@@ -1525,13 +1660,25 @@ const DashboardScreen = ({ navigation }) => {
         ) : (
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Alerts</Text>
-              <TouchableOpacity 
-                style={styles.filterIconButton}
-                onPress={handleFilterToggle}
-              >
-                <Icon name={getFilterIcon()} size={24} color="#007AFF" />
-              </TouchableOpacity>
+              <Text style={styles.sectionTitle}>
+                {showArchived ? 'Archived Alerts' : 'Alerts'}
+              </Text>
+              <View style={styles.headerButtons}>
+                {!showArchived && (
+                  <TouchableOpacity 
+                    style={styles.filterIconButton}
+                    onPress={handleFilterToggle}
+                  >
+                    <Icon name={getFilterIcon()} size={24} color="#007AFF" />
+                  </TouchableOpacity>
+                )}
+                <TouchableOpacity 
+                  style={[styles.filterIconButton, showArchived && styles.activeFilterButton]}
+                  onPress={toggleArchivedView}
+                >
+                  <Icon name="archive" size={24} color={showArchived ? "#007AFF" : "#007AFF"} />
+                </TouchableOpacity>
+              </View>
             </View>
 
             {showChatBox && (
@@ -2706,6 +2853,47 @@ const styles = StyleSheet.create({
   filterOptionTextSelected: {
     color: '#007AFF',
     fontWeight: '500',
+  },
+  headerButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 10,
+  },
+  activeFilterButton: {
+    backgroundColor: '#E3F2FD',
+  },
+  swipeActionsContainer: {
+    position: 'absolute',
+    right: 0,
+    top: 0,
+    bottom: 0,
+    width: 200,
+    flexDirection: 'row',
+    zIndex: 0,
+    borderRadius: 8,
+    overflow: 'hidden',
+  },
+  archivedSwipeActionsContainer: {
+    width: 100, // Reduced width for archived alerts
+  },
+  swipeActionButton: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  archivedDeleteButton: {
+    width: 100, // Fixed width for archived delete button
+  },
+  archiveButton: {
+    backgroundColor: '#8A2BE2',
+  },
+  deleteButton: {
+    backgroundColor: '#FF3B30',
+  },
+  swipeActionText: {
+    color: 'white',
+    fontWeight: 'bold',
   },
 });
 
