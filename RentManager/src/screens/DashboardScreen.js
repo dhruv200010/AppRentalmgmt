@@ -57,6 +57,7 @@ const DashboardScreen = ({ navigation }) => {
   const dispatch = useDispatch();
   const [propertyModalVisible, setPropertyModalVisible] = useState(false);
   const [propertyName, setPropertyName] = useState('');
+  const [completedAlerts, setCompletedAlerts] = useState({}); // Track completed alerts
 
   // Lead modal state
   const [leadModalVisible, setLeadModalVisible] = useState(false);
@@ -1024,6 +1025,15 @@ const DashboardScreen = ({ navigation }) => {
       console.log('Current time when received:', new Date().toLocaleString());
       console.log('Time difference:', new Date().getTime() - notification.date);
       console.log('=== End of notification details ===\n');
+      
+      // Mark the alert as completed when notification is triggered
+      const leadId = notification.request.content.data?.leadId;
+      if (leadId) {
+        setCompletedAlerts(prev => ({
+          ...prev,
+          [leadId]: true
+        }));
+      }
     });
 
     // This listener is called when a user taps on a notification
@@ -1034,12 +1044,30 @@ const DashboardScreen = ({ navigation }) => {
       console.log('Action identifier:', response.actionIdentifier);
       console.log('User text:', response.userText);
       console.log('=== End of response details ===\n');
+      
+      // Mark the alert as completed when user interacts with notification
+      const leadId = response.notification.request.content.data?.leadId;
+      if (leadId) {
+        setCompletedAlerts(prev => ({
+          ...prev,
+          [leadId]: true
+        }));
+      }
     });
 
     // Get initial notification
     Notifications.getLastNotificationResponseAsync().then(response => {
       if (response) {
         console.log('Last notification response:', JSON.stringify(response, null, 2));
+        
+        // Mark the alert as completed if it was the last notification
+        const leadId = response.notification.request.content.data?.leadId;
+        if (leadId) {
+          setCompletedAlerts(prev => ({
+            ...prev,
+            [leadId]: true
+          }));
+        }
       }
     });
 
@@ -1112,6 +1140,10 @@ const DashboardScreen = ({ navigation }) => {
       new Date(b.timestamp) - new Date(a.timestamp)
     ) : [];
 
+    // Determine if alert is completed or pending
+    const isCompleted = completedAlerts[item.id] || new Date(item.alertTime) < new Date();
+    const statusColor = isCompleted ? '#808080' : '#4CAF50'; // gray for completed, green for pending
+
     const handleLongPress = async () => {
       if (item.contactNo) {
         try {
@@ -1179,6 +1211,8 @@ const DashboardScreen = ({ navigation }) => {
             styles.leadCard,
             {
               transform: [{ translateX: swipeX }],
+              borderLeftWidth: 4,
+              borderLeftColor: statusColor,
             },
           ]}
         >
