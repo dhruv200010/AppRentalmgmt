@@ -1407,13 +1407,32 @@ const DashboardScreen = ({ navigation }) => {
                 <View style={styles.leadAlert}>
                   <Icon name="bell" size={14} color="#007AFF" />
                   <Text style={{ color: '#007AFF' }}>
-                    {new Date(item.alertTime).toLocaleString([], { 
-                      year: 'numeric',
-                      month: 'numeric',
-                      day: 'numeric',
-                      hour: '2-digit',
-                      minute: '2-digit'
-                    })}
+                    {(() => {
+                      const alertDate = new Date(item.alertTime);
+                      const today = new Date();
+                      const diffTime = alertDate - today;
+                      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                      
+                      if (diffDays === 0) {
+                        return `Today ${alertDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+                      } else if (diffDays === 1) {
+                        return `Tomorrow ${alertDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+                      } else if (diffDays >= 2 && diffDays <= 7) {
+                        // For dates within the next week, show day name
+                        const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+                        const dayName = dayNames[alertDate.getDay()];
+                        return `${dayName} ${alertDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+                      } else {
+                        // For dates beyond next week, show full date
+                        return alertDate.toLocaleString([], { 
+                          year: 'numeric',
+                          month: 'numeric',
+                          day: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        });
+                      }
+                    })()}
                   </Text>
                 </View>
               )}
