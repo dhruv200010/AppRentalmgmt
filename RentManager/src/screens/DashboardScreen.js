@@ -719,11 +719,10 @@ const DashboardScreen = ({ navigation }) => {
     console.log('Starting message parsing...');
     console.log('Original message:', message);
 
-    // Updated time regex to handle more formats
-    const timeRegex = /(?:^|\s)(\d{1,2})(?:[:.](\d{2}))?\s*(am|pm|a\.m\.|p\.m\.)?(?:\s|$)/i;
+    const timeRegex = /(?:^|\s)(\d{1,2})(?:[:.](\d{2}))?\s*(am|pm)(?:\s|$)/i;
     const callRegex = /(?:to\s+)?call\s+(?:with\s+)?([a-zA-Z]+)/i;
-    const todayRegex = /(?:^|\s)(today|tonight)(?:\s|$)/i;
-    const tomorrowRegex = /(?:^|\s)(tomorrow|tmrw|tmr|tom)(?:\s|$)/i;
+    const todayRegex = /(?:^|\s)(today)(?:\s|$)/i;
+    const tomorrowRegex = /(?:^|\s)(tomorrow)(?:\s|$)/i;
     const phoneRegex = /(?:\+?(\d{1,3}))?[-. (]*(\d{3})[-. )]*(\d{3})[-. ]*(\d{4,})(?: *x\d+)?/;
     const hashtagRegex = /#(\w+)/g;
     
@@ -743,33 +742,7 @@ const DashboardScreen = ({ navigation }) => {
 
     console.log('Initial date:', date.toLocaleString());
 
-    // First, check for tomorrow variations
-    const tomorrowMatch = message.match(tomorrowRegex);
-    if (tomorrowMatch) {
-      console.log('Tomorrow specified:', tomorrowMatch[1]);
-      date.setDate(date.getDate() + 1);
-      daySpecified = true;
-      // Remove tomorrow variations from the message
-      processedMessage = processedMessage.replace(tomorrowRegex, ' ').trim();
-      console.log('Tomorrow specified, date updated:', date.toLocaleString());
-    }
-
-    // Then check for today/tonight
-    const todayMatch = message.match(todayRegex);
-    if (todayMatch && !daySpecified) {
-      console.log('Today/tonight specified:', todayMatch[1]);
-      if (todayMatch[1].toLowerCase() === 'tonight') {
-        date.setHours(20, 0, 0, 0); // Set to 8 PM for tonight
-      } else {
-        date.setHours(10, 0, 0, 0); // Set to 10 AM for today
-      }
-      daySpecified = true;
-      // Remove 'today'/'tonight' from the message
-      processedMessage = processedMessage.replace(todayRegex, ' ').trim();
-      console.log('Today/tonight specified, final date:', date.toLocaleString());
-    }
-
-    // Extract time with improved parsing
+    // Extract time first
     const timeMatch = message.match(timeRegex);
     if (timeMatch) {
       console.log('Time match found:', timeMatch);
@@ -778,26 +751,197 @@ const DashboardScreen = ({ navigation }) => {
       const period = timeMatch[3]?.toLowerCase();
 
       // Convert to 24-hour format
-      if (period) {
-        if (period.includes('pm') || period.includes('p.m.')) {
-          if (hours !== 12) {
-            hours += 12;
-          }
-        } else if ((period.includes('am') || period.includes('a.m.')) && hours === 12) {
-          hours = 0;
-        }
-      } else {
-        // If no period specified, assume PM for hours 1-11, AM for 12
-        if (hours >= 1 && hours <= 11) {
+      if (period === 'pm') {
+        if (hours !== 12) {
           hours += 12;
         }
+      } else if (period === 'am' && hours === 12) {
+        hours = 0;
       }
 
       date.setHours(hours, minutes, 0, 0);
       timeSpecified = true;
-      // Remove the time from the processed message
+      // Remove time from the message
       processedMessage = processedMessage.replace(timeRegex, ' ').trim();
       console.log('Time specified, final date:', date.toLocaleString());
+    }
+
+    // Check for today
+    const todayMatch = message.match(todayRegex);
+    if (todayMatch) {
+      console.log('Today specified');
+      daySpecified = true;
+      // Remove 'today' from the message
+      processedMessage = processedMessage.replace(todayRegex, ' ').trim();
+      console.log('Today specified, final date:', date.toLocaleString());
+    }
+
+    // Check for tomorrow
+    const tomorrowMatch = message.match(tomorrowRegex);
+    if (tomorrowMatch && !daySpecified) {
+      console.log('Tomorrow specified');
+      date.setDate(date.getDate() + 1);
+      daySpecified = true;
+      // Remove 'tomorrow' from the message
+      processedMessage = processedMessage.replace(tomorrowRegex, ' ').trim();
+      console.log('Tomorrow specified, final date:', date.toLocaleString());
+    }
+
+    // Check for day-related patterns
+    const dayMatch = message.match(dayRegex);
+    if (dayMatch && !daySpecified) {
+      const dayStr = dayMatch[1].toLowerCase();
+      console.log('Day match found:', dayStr);
+      
+      // Get current day of week (0-6, where 0 is Sunday)
+      const currentDay = date.getDay();
+      let targetDay;
+      
+      if (dayStr === 'weekend') {
+        // If it's already weekend, set for next weekend
+        if (currentDay === 0 || currentDay === 6) {
+          targetDay = 6; // Next Saturday
+          date.setDate(date.getDate() + (6 - currentDay + 7));
+        } else {
+          targetDay = 6; // This Saturday
+          date.setDate(date.getDate() + (6 - currentDay));
+        }
+      } else {
+        // Map day names to numbers (0-6)
+        const dayMap = {
+          'sun': 0, 'sunday': 0,
+          'mon': 1, 'monday': 1,
+          'tue': 2, 'tuesday': 2,
+          'wed': 3, 'wednesday': 3,
+          'thu': 4, 'thursday': 4,
+          'fri': 5, 'friday': 5,
+          'sat': 6, 'saturday': 6
+        };
+        
+        targetDay = dayMap[dayStr];
+        
+        // Calculate days to add
+        let daysToAdd = targetDay - currentDay;
+        if (daysToAdd <= 0) {
+          daysToAdd += 7; // Move to next week
+        }
+        date.setDate(date.getDate() + daysToAdd);
+      }
+      
+      daySpecified = true;
+      // Remove day specification from the message
+      processedMessage = processedMessage.replace(dayRegex, ' ').trim();
+      console.log('Day specified, final date:', date.toLocaleString());
+    }
+
+    // Check for next week
+    const nextWeekMatch = message.match(nextWeekRegex);
+    if (nextWeekMatch && !daySpecified) {
+      date.setDate(date.getDate() + 7);
+      daySpecified = true;
+      // Remove next week from the message
+      processedMessage = processedMessage.replace(nextWeekRegex, ' ').trim();
+      console.log('Next week specified, final date:', date.toLocaleString());
+    }
+
+    // If no time was specified, set default to 10 AM
+    if (!timeSpecified) {
+      date.setHours(10, 0, 0, 0);
+      console.log('No time specified, setting default to 10 AM');
+    }
+
+    // Only set default 2-day schedule if no day was specified
+    if (!daySpecified) {
+      date.setDate(date.getDate() + 2);
+      console.log('No day specified, setting default reminder for 2 days later at 10 AM:', date.toLocaleString());
+    }
+
+    // Clean up the processed message by removing any remaining time/date patterns
+    processedMessage = processedMessage
+      .replace(/\d{1,2}(?::\d{2})?\s*(?:am|pm)/gi, '') // Remove any remaining time patterns
+      .replace(/\b(today|tomorrow|next week|weekend|mon(?:day)?|tue(?:sday)?|wed(?:nesday)?|thu(?:rsday)?|fri(?:day)?|sat(?:urday)?|sun(?:day)?)\b/gi, '') // Remove any remaining day patterns
+      .replace(/\s+/g, ' ') // Replace multiple spaces with single space
+      .trim(); // Remove leading/trailing spaces
+
+    // Check if message contains a phone number
+    const trimmedMessage = processedMessage.trim();
+    const phoneMatch = trimmedMessage.match(phoneRegex);
+    
+    if (phoneMatch) {
+      console.log('Phone number detected:', phoneMatch[0]);
+      // Format the phone number by removing non-digit characters and preserving all digits
+      contactNo = phoneMatch[0].replace(/\D/g, '');
+      
+      // Extract name and categories from the message
+      let remainingText = trimmedMessage.replace(phoneMatch[0], '').trim();
+      
+      // Check for hashtags that match available categories
+      const hashtagMatches = [...remainingText.matchAll(hashtagRegex)];
+      for (const match of hashtagMatches) {
+        const hashtagValue = match[1].toLowerCase();
+        
+        // Check if the hashtag matches any available source
+        const matchingSource = sources.find(s => s.toLowerCase() === hashtagValue);
+        if (matchingSource) {
+          source = matchingSource;
+          remainingText = remainingText.replace(match[0], '').trim();
+          continue;
+        }
+        
+        // Check if the hashtag matches any available category
+        const matchingCategory = categories.find(c => c.toLowerCase() === hashtagValue);
+        if (matchingCategory) {
+          category = matchingCategory;
+          remainingText = remainingText.replace(match[0], '').trim();
+          continue;
+        }
+        
+        // Check if the hashtag matches any available location
+        const matchingLocation = locations.find(l => l.toLowerCase() === hashtagValue);
+        if (matchingLocation) {
+          location = matchingLocation;
+          remainingText = remainingText.replace(match[0], '').trim();
+          continue;
+        }
+      }
+
+      // Check for categories without hashtags
+      for (const cat of categories) {
+        if (remainingText.toLowerCase().includes(cat.toLowerCase())) {
+          category = cat;
+          remainingText = remainingText.replace(new RegExp(cat, 'i'), '').trim();
+          break;
+        }
+      }
+      
+      // Check for sources without hashtags
+      for (const src of sources) {
+        if (remainingText.toLowerCase().includes(src.toLowerCase())) {
+          source = src;
+          remainingText = remainingText.replace(new RegExp(src, 'i'), '').trim();
+          break;
+        }
+      }
+      
+      // Clean up the remaining text for the name
+      name = remainingText
+        .replace(/\s+/g, ' ') // Replace multiple spaces with single space
+        .trim(); // Remove leading/trailing spaces
+      
+      // If no name remains after cleaning, use the phone number as name
+      if (!name) {
+        name = contactNo;
+      }
+
+      return {
+        name,
+        contactNo,
+        date,
+        category,
+        source,
+        location,
+        isPhoneNumber: true
+      };
     }
 
     // Extract name and category from call pattern
