@@ -721,9 +721,14 @@ const DashboardScreen = ({ navigation }) => {
 
     const timeRegex = /(?:^|\s)(\d{1,2})(?:[:.](\d{2}))?\s*(am|pm)(?:\s|$)/i;
     const callRegex = /(?:to\s+)?call\s+(?:with\s+)?([a-zA-Z]+)/i;
-    const todayRegex = /today/i;
-    const phoneRegex = /(?:\+?(\d{1,3}))?[-. (]*(\d{3})[-. )]*(\d{3})[-. ]*(\d{4})(?: *x\d+)?/;
+    const todayRegex = /(?:^|\s)(today)(?:\s|$)/i;
+    const tomorrowRegex = /(?:^|\s)(tomorrow)(?:\s|$)/i;
+    const phoneRegex = /(?:\+?(\d{1,3}))?[-. (]*(\d{3})[-. )]*(\d{3})[-. ]*(\d{4,})(?: *x\d+)?/;
     const hashtagRegex = /#(\w+)/g;
+    
+    // Add day-related regex patterns
+    const dayRegex = /(?:^|\s)(mon(?:day)?|tue(?:sday)?|wed(?:nesday)?|thu(?:rsday)?|fri(?:day)?|sat(?:urday)?|sun(?:day)?|weekend)(?:\s|$)/i;
+    const nextWeekRegex = /next\s+week/i;
 
     let date = new Date();
     let name = '';
@@ -732,8 +737,93 @@ const DashboardScreen = ({ navigation }) => {
     let source = '';
     let location = '';
     let timeSpecified = false;
+    let daySpecified = false;
+    let processedMessage = message;
 
     console.log('Initial date:', date.toLocaleString());
+
+    // Check for today
+    const todayMatch = message.match(todayRegex);
+    if (todayMatch) {
+      console.log('Today specified');
+      date.setHours(10, 0, 0, 0);
+      daySpecified = true;
+      // Remove 'today' from the message
+      processedMessage = processedMessage.replace(todayRegex, ' ').trim();
+      console.log('Today specified, final date:', date.toLocaleString());
+    }
+
+    // Check for tomorrow
+    const tomorrowMatch = message.match(tomorrowRegex);
+    if (tomorrowMatch && !daySpecified) {
+      console.log('Tomorrow specified');
+      date.setDate(date.getDate() + 1);
+      date.setHours(10, 0, 0, 0);
+      daySpecified = true;
+      // Remove 'tomorrow' from the message
+      processedMessage = processedMessage.replace(tomorrowRegex, ' ').trim();
+      console.log('Tomorrow specified, final date:', date.toLocaleString());
+    }
+
+    // Check for day-related patterns
+    const dayMatch = message.match(dayRegex);
+    if (dayMatch && !daySpecified) {
+      const dayStr = dayMatch[1].toLowerCase();
+      console.log('Day match found:', dayStr);
+      
+      // Get current day of week (0-6, where 0 is Sunday)
+      const currentDay = date.getDay();
+      let targetDay;
+      
+      if (dayStr === 'weekend') {
+        // If it's already weekend, set for next weekend
+        if (currentDay === 0 || currentDay === 6) {
+          targetDay = 6; // Next Saturday
+          date.setDate(date.getDate() + (6 - currentDay + 7));
+        } else {
+          targetDay = 6; // This Saturday
+          date.setDate(date.getDate() + (6 - currentDay));
+        }
+      } else {
+        // Map day names to numbers (0-6)
+        const dayMap = {
+          'sun': 0, 'sunday': 0,
+          'mon': 1, 'monday': 1,
+          'tue': 2, 'tuesday': 2,
+          'wed': 3, 'wednesday': 3,
+          'thu': 4, 'thursday': 4,
+          'fri': 5, 'friday': 5,
+          'sat': 6, 'saturday': 6
+        };
+        
+        targetDay = dayMap[dayStr];
+        
+        // Calculate days to add
+        let daysToAdd = targetDay - currentDay;
+        if (daysToAdd <= 0) {
+          daysToAdd += 7; // Move to next week
+        }
+        date.setDate(date.getDate() + daysToAdd);
+      }
+      
+      // Set default time to 10 AM
+      date.setHours(10, 0, 0, 0);
+      daySpecified = true;
+      // Remove day specification from the message
+      processedMessage = processedMessage.replace(dayRegex, ' ').trim();
+      console.log('Day specified, final date:', date.toLocaleString());
+    }
+
+    // Check for next week
+    const nextWeekMatch = message.match(nextWeekRegex);
+    if (nextWeekMatch && !daySpecified) {
+      date.setDate(date.getDate() + 7);
+      date.setHours(10, 0, 0, 0);
+      daySpecified = true;
+      // Remove next week from the message
+      processedMessage = processedMessage.replace(nextWeekRegex, ' ').trim();
+      console.log('Next week specified, final date:', date.toLocaleString());
+    }
 
     // Check if message contains a phone number
     const trimmedMessage = message.trim();
@@ -741,7 +831,7 @@ const DashboardScreen = ({ navigation }) => {
     
     if (phoneMatch) {
       console.log('Phone number detected:', phoneMatch[0]);
-      // Format the phone number by removing non-digit characters
+      // Format the phone number by removing non-digit characters and preserving all digits
       contactNo = phoneMatch[0].replace(/\D/g, '');
       
       // Extract name and categories from the message
@@ -841,7 +931,7 @@ const DashboardScreen = ({ navigation }) => {
     }
 
     // Extract name and category from call pattern
-    const nameMatch = message.match(callRegex);
+    const nameMatch = processedMessage.match(callRegex);
     if (nameMatch) {
       name = nameMatch[1];
       category = 'Call';
@@ -850,8 +940,6 @@ const DashboardScreen = ({ navigation }) => {
     }
 
     // Process the message to extract sources and categories
-    let processedMessage = message;
-    
     // Check for category patterns
     const categoryPatterns = [
       { pattern: /call\s+(?:with\s+)?/i, category: 'Call' },
@@ -894,11 +982,15 @@ const DashboardScreen = ({ navigation }) => {
       name = processedMessage.trim();
     }
 
-    // If no time was specified, set default to 10 AM two days from now
+    // If no time was specified, set default to 10 AM
     if (!timeSpecified) {
-      date.setDate(date.getDate() + 2);
       date.setHours(10, 0, 0, 0);
-      console.log('No time specified, setting default reminder for 2 days later at 10 AM:', date.toLocaleString());
+    }
+
+    // Only set default 2-day schedule if no day was specified
+    if (!daySpecified && !timeSpecified) {
+      date.setDate(date.getDate() + 2);
+      console.log('No day specified, setting default reminder for 2 days later at 10 AM:', date.toLocaleString());
     }
 
     console.log('Final parsed data:', {
