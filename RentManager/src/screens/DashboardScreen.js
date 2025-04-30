@@ -960,14 +960,21 @@ const DashboardScreen = ({ navigation }) => {
       { pattern: /follow\s+up\s+(?:with\s+)?/i, category: 'Follow up with' },
       { pattern: /send\s+lease\s+(?:to\s+)?/i, category: 'Send lease to' },
       { pattern: /landed/i, category: 'landed' },
-      { pattern: /nuh-uh/i, category: 'Nuh-uh' }
+      { pattern: /nuh-uh/i, category: 'Nuh-uh' },
+      { pattern: /new/i, category: 'New' },
+      { pattern: /\b(austin)\b/i, location: 'Austin' },
+      { pattern: /\b(kyle)\b/i, location: 'Kyle' }
     ];
     
-    for (const { pattern, category: cat } of categoryPatterns) {
+    for (const { pattern, category: cat, location: loc } of categoryPatterns) {
       if (pattern.test(processedMessage)) {
-        category = cat;
+        if (cat) {
+          category = cat;
+        }
+        if (loc) {
+          location = loc;
+        }
         processedMessage = processedMessage.replace(pattern, '').trim();
-        break;
       }
     }
     

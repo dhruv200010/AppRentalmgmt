@@ -3,7 +3,7 @@ import { createSlice } from '@reduxjs/toolkit';
 const initialState = {
   leads: [],
   sources: ['roomies', 'fb', 'roomster', 'telegram', 'sulekha', 'whatsapp', 'others'],
-  categories: ['Call', 'Follow up with', 'Send lease to', 'landed', 'Nuh-uh'],
+  categories: ['Call', 'Follow up with', 'Send lease to', 'landed', 'Nuh-uh', 'New'],
   locations: ['Austin', 'Kyle'],
 };
 
