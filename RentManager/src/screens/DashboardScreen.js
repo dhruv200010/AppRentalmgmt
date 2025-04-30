@@ -1410,8 +1410,12 @@ const DashboardScreen = ({ navigation }) => {
                     {(() => {
                       const alertDate = new Date(item.alertTime);
                       const today = new Date();
-                      const diffTime = alertDate - today;
-                      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                      
+                      // Reset time components to compare only dates
+                      const alertDateOnly = new Date(alertDate.getFullYear(), alertDate.getMonth(), alertDate.getDate());
+                      const todayOnly = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+                      
+                      const diffDays = Math.floor((alertDateOnly - todayOnly) / (1000 * 60 * 60 * 24));
                       
                       if (diffDays === 0) {
                         return `Today ${alertDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
