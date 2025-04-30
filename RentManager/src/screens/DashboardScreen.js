@@ -27,6 +27,7 @@ import * as Notifications from 'expo-notifications';
 import * as Clipboard from 'expo-clipboard';
 import * as ImagePicker from 'expo-image-picker';
 import { PinchGestureHandler, State, GestureHandlerRootView } from 'react-native-gesture-handler';
+import { useAuth } from '@clerk/clerk-expo';
 
 // Configure notifications
 Notifications.setNotificationHandler({
@@ -49,6 +50,7 @@ Notifications.setNotificationCategoryAsync('lead', [
 ]);
 
 const DashboardScreen = ({ navigation }) => {
+  const { signOut } = useAuth();
   const properties = useSelector((state) => state.properties.properties);
   const leads = useSelector((state) => state.leads.leads);
   const sources = useSelector((state) => state.leads.sources);
@@ -1642,8 +1644,23 @@ const DashboardScreen = ({ navigation }) => {
     setShowArchived(!showArchived);
   };
 
+  const handleSignOut = async () => {
+    try {
+      await signOut();
+      navigation.replace('Login');
+    } catch (err) {
+      console.error('Error signing out:', err);
+    }
+  };
+
   return (
     <View style={styles.container}>
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>📊 Dashboard</Text>
+        <TouchableOpacity onPress={handleSignOut} style={styles.signOutButton}>
+          <Icon name="logout" size={24} color="#007AFF" />
+        </TouchableOpacity>
+      </View>
       <View style={styles.contentContainer}>
         {activeTab === 'properties' ? (
           <View style={styles.section}>
@@ -2225,8 +2242,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   activeTab: {
-    borderTopWidth: 2,
-    borderTopColor: '#007AFF',
+    // Remove the border properties entirely
   },
   tabText: {
     marginTop: 2,
@@ -2235,6 +2251,7 @@ const styles = StyleSheet.create({
   },
   activeTabText: {
     color: '#007AFF',
+    fontWeight: '500',
   },
   addPropertyButton: {
     backgroundColor: '#007AFF',
@@ -2250,35 +2267,39 @@ const styles = StyleSheet.create({
   },
   propertyCard: {
     backgroundColor: 'white',
-    margin: 5,
-    padding: 10,
-    borderRadius: 10,
+    margin: 8,
+    padding: 12,
+    borderRadius: 12,
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
       height: 2,
     },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    elevation: 5,
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   propertyHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 15,
+    marginBottom: 12,
+    paddingBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
   },
   propertyInfo: {
     flex: 1,
   },
   propertyName: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: 'bold',
+    color: '#333',
   },
   roomCount: {
-    fontSize: 14,
+    fontSize: 13,
     color: '#666',
-    marginTop: 4,
+    marginTop: 2,
   },
   actionButtons: {
     flexDirection: 'row',
@@ -2286,8 +2307,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 8,
     paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: '#e0e0e0',
   },
   iconButton: {
     padding: 8,
@@ -2894,6 +2913,81 @@ const styles = StyleSheet.create({
   swipeActionText: {
     color: 'white',
     fontWeight: 'bold',
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: 'white',
+    borderBottomWidth: 1,
+    borderBottomColor: '#ddd',
+  },
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  signOutButton: {
+    padding: 8,
+  },
+  roomStatus: {
+    backgroundColor: 'white',
+    padding: 6, // Reduced from 8
+    borderRadius: 8,
+    marginHorizontal: 4, // Reduced from 6
+    marginBottom: 6, // Reduced from 8
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 3,
+    minWidth: 120,
+    overflow: 'hidden',
+  },
+  roomContent: {
+    flexDirection: 'column',
+    gap: 2, // Reduced from 4
+    position: 'relative',
+  },
+  roomTypeLabel: {
+    fontSize: 13, // Reduced from 14
+    fontWeight: '600',
+    color: '#333',
+  },
+  roomNumber: {
+    fontSize: 15, // Reduced from 16
+    fontWeight: 'bold',
+    color: '#000',
+  },
+  duration: {
+    fontSize: 12, // Reduced from 13
+    fontWeight: '500',
+  },
+  vacantRoomContent: {
+    opacity: 0.8,
+  },
+  stripedBackground: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    opacity: 0.1,
+  },
+  stripe: {
+    position: 'absolute',
+    height: 1,
+    backgroundColor: '#007AFF',
+  },
+  roomsContainer: {
+    flexDirection: 'row',
+    paddingVertical: 4, // Reduced from 8
+    paddingHorizontal: 2, // Reduced from 4
   },
 });
 

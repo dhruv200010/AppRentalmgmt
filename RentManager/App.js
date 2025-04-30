@@ -1,5 +1,5 @@
 import React from 'react';
-import { SafeAreaView, StatusBar, StyleSheet, TouchableOpacity, Text, Alert } from 'react-native';
+import { SafeAreaView, StatusBar, StyleSheet } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Provider } from 'react-redux';
@@ -13,7 +13,6 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { ClerkProvider, SignedIn, SignedOut, useAuth } from '@clerk/clerk-expo';
 import Constants from 'expo-constants';
 import * as SecureStore from 'expo-secure-store';
-import { Ionicons } from '@expo/vector-icons';
 import 'react-native-gesture-handler';
 
 // Enable native screens for better performance
@@ -39,7 +38,7 @@ const tokenCache = {
 };
 
 function NavigationContent() {
-  const { signOut, isSignedIn } = useAuth();
+  const { isSignedIn } = useAuth();
 
   return (
     <Stack.Navigator 
@@ -66,51 +65,9 @@ function NavigationContent() {
       <Stack.Screen 
         name="Dashboard" 
         component={DashboardScreen}
-        options={({ navigation }) => ({ 
-          title: 'Rent Manager',
-          headerRight: () => (
-            <TouchableOpacity 
-              onPress={() => {
-                Alert.alert(
-                  "Sign Out",
-                  "Are you sure you want to sign out?",
-                  [
-                    {
-                      text: "Cancel",
-                      style: "cancel"
-                    },
-                    { 
-                      text: "Sign Out", 
-                      onPress: async () => {
-                        try {
-                          await signOut();
-                          navigation.reset({
-                            index: 0,
-                            routes: [{ name: 'Login' }],
-                          });
-                        } catch (error) {
-                          console.error('Error signing out:', error);
-                        }
-                      },
-                      style: "destructive"
-                    }
-                  ]
-                );
-              }}
-              activeOpacity={0.7}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              style={{ 
-                marginRight: 4, 
-                flexDirection: 'row', 
-                alignItems: 'center',
-                padding: 8,
-                paddingRight: 16
-              }}
-            >
-              <Ionicons name="exit-outline" size={26} color="#FF3B30" />
-            </TouchableOpacity>
-          ),
-        })}
+        options={{ 
+          title: 'Rent Manager'
+        }}
       />
       <Stack.Screen 
         name="Property" 
