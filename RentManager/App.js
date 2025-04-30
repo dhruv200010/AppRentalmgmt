@@ -1,5 +1,5 @@
-import React from 'react';
-import { SafeAreaView, StatusBar, StyleSheet } from 'react-native';
+import React, { useEffect } from 'react';
+import { SafeAreaView, StatusBar, StyleSheet, Text } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Provider } from 'react-redux';
@@ -14,6 +14,14 @@ import { ClerkProvider, SignedIn, SignedOut, useAuth } from '@clerk/clerk-expo';
 import Constants from 'expo-constants';
 import * as SecureStore from 'expo-secure-store';
 import 'react-native-gesture-handler';
+import { app, auth } from './src/config/firebase';
+import firebaseService from './src/services/firebaseService';
+
+// Debug environment variables
+console.log('Environment Variables:', {
+  EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY: process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY,
+  Constants: Constants.expoConfig.extra
+});
 
 // Enable native screens for better performance
 enableScreens();
@@ -38,7 +46,34 @@ const tokenCache = {
 };
 
 function NavigationContent() {
-  const { isSignedIn } = useAuth();
+  const { isSignedIn, userId } = useAuth();
+
+  // Sync user data with Firebase when signed in
+  useEffect(() => {
+    if (isSignedIn && userId) {
+      const syncUserData = async () => {
+        try {
+          const userData = await firebaseService.getUserData(userId);
+          if (!userData) {
+            // Initialize user data in Firebase if it doesn't exist
+            await firebaseService.setUserData(userId, {
+              createdAt: new Date().toISOString(),
+              lastLogin: new Date().toISOString()
+            });
+          } else {
+            // Update last login time
+            await firebaseService.setUserData(userId, {
+              lastLogin: new Date().toISOString()
+            });
+          }
+        } catch (error) {
+          console.error('Error syncing user data:', error);
+        }
+      };
+
+      syncUserData();
+    }
+  }, [isSignedIn, userId]);
 
   return (
     <Stack.Navigator 
@@ -84,9 +119,25 @@ function NavigationContent() {
 }
 
 export default function App() {
+  // Get the publishable key from Constants
+  const publishableKey = Constants.expoConfig.extra.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY;
+  
+  // Debug the key
+  console.log('Publishable Key:', publishableKey);
+  
+  if (!publishableKey) {
+    console.error('Clerk publishable key is missing!');
+    return (
+      <SafeAreaView style={styles.container}>
+        <StatusBar barStyle="dark-content" />
+        <Text>Error: Clerk publishable key is missing. Please check your configuration.</Text>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <ClerkProvider 
-      publishableKey={Constants.expoConfig.extra.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY}
+      publishableKey={publishableKey}
       tokenCache={tokenCache}
     >
       <GestureHandlerRootView style={{ flex: 1 }}>
