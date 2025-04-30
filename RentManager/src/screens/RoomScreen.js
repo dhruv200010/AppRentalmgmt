@@ -29,6 +29,7 @@ const RoomScreen = ({ route }) => {
   const [status, setStatus] = useState('Vacant');
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [occupiedUntil, setOccupiedUntil] = useState(new Date());
+  const [isMonthToMonth, setIsMonthToMonth] = useState(false);
 
   const handleAddRoom = () => {
     if (!tenant || !roomType) {
@@ -52,7 +53,7 @@ const RoomScreen = ({ route }) => {
       type: roomType,
       tenant: tenant,
       status: status,
-      occupiedUntil: status === 'Occupied' ? occupiedUntil.toISOString() : null,
+      occupiedUntil: status === 'Occupied' ? (isMonthToMonth ? 'Month to Month' : occupiedUntil.toISOString()) : null,
     };
 
     if (editingRoom) {
@@ -76,7 +77,8 @@ const RoomScreen = ({ route }) => {
     setTenant(room.tenant || '');
     setRoomType(room.type);
     setStatus(room.status);
-    setOccupiedUntil(room.occupiedUntil ? new Date(room.occupiedUntil) : new Date());
+    setOccupiedUntil(room.occupiedUntil && room.occupiedUntil !== 'Month to Month' ? new Date(room.occupiedUntil) : new Date());
+    setIsMonthToMonth(room.occupiedUntil === 'Month to Month');
     setModalVisible(true);
   };
 
@@ -101,6 +103,7 @@ const RoomScreen = ({ route }) => {
     setRoomType('');
     setStatus('Vacant');
     setOccupiedUntil(new Date());
+    setIsMonthToMonth(false);
   };
 
   const renderRoom = ({ item }) => (
@@ -189,14 +192,34 @@ const RoomScreen = ({ route }) => {
             </Picker>
 
             {status === 'Occupied' && (
-              <TouchableOpacity
-                style={styles.dateButton}
-                onPress={() => setShowDatePicker(true)}
-              >
-                <Text style={styles.dateButtonText}>
-                  Occupied Until: {occupiedUntil.toLocaleDateString()}
-                </Text>
-              </TouchableOpacity>
+              <>
+                <View style={styles.monthToMonthContainer}>
+                  <TouchableOpacity
+                    style={[styles.monthToMonthButton, isMonthToMonth && styles.monthToMonthButtonActive]}
+                    onPress={() => {
+                      setIsMonthToMonth(!isMonthToMonth);
+                      if (!isMonthToMonth) {
+                        setShowDatePicker(false);
+                      }
+                    }}
+                  >
+                    <Text style={[styles.monthToMonthText, isMonthToMonth && styles.monthToMonthTextActive]}>
+                      Month to Month
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+
+                {!isMonthToMonth && (
+                  <TouchableOpacity
+                    style={styles.dateButton}
+                    onPress={() => setShowDatePicker(true)}
+                  >
+                    <Text style={styles.dateButtonText}>
+                      Occupied Until: {occupiedUntil.toLocaleDateString()}
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              </>
             )}
 
             {showDatePicker && (
@@ -357,6 +380,25 @@ const styles = StyleSheet.create({
     color: 'white',
     textAlign: 'center',
     fontWeight: 'bold',
+  },
+  monthToMonthContainer: {
+    marginBottom: 15,
+  },
+  monthToMonthButton: {
+    backgroundColor: '#f0f0f0',
+    padding: 10,
+    borderRadius: 5,
+    alignItems: 'center',
+  },
+  monthToMonthButtonActive: {
+    backgroundColor: '#34C759',
+  },
+  monthToMonthText: {
+    color: '#333',
+    fontWeight: '500',
+  },
+  monthToMonthTextActive: {
+    color: 'white',
   },
 });
 

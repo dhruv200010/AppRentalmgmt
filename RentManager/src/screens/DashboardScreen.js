@@ -132,6 +132,8 @@ const DashboardScreen = ({ navigation }) => {
   const getRoomStatusColor = (room) => {
     if (room.status === 'Vacant') return '#8A2BE2'; // Violet for vacant
     
+    if (room.occupiedUntil === 'Month to Month') return '#34C759'; // Green for month to month
+    
     const remainingDays = getRemainingDays(room.occupiedUntil);
     if (remainingDays <= 15) return '#FF3B30'; // Red for less than 15 days
     if (remainingDays <= 30) return '#FF9500'; // Orange for 15-30 days
@@ -140,6 +142,8 @@ const DashboardScreen = ({ navigation }) => {
 
   const getRemainingTimeText = (room) => {
     if (room.status === 'Vacant') return 'Vacant';
+    
+    if (room.occupiedUntil === 'Month to Month') return 'Month to Month';
     
     const remainingDays = getRemainingDays(room.occupiedUntil);
     if (remainingDays < 0) return 'Lease Expired';
@@ -153,6 +157,8 @@ const DashboardScreen = ({ navigation }) => {
 
   const getRoomSortOrder = (room) => {
     if (room.status === 'Vacant') return 0; // Vacant rooms first
+    
+    if (room.occupiedUntil === 'Month to Month') return 3; // Month to month after urgent rooms
     
     const remainingDays = getRemainingDays(room.occupiedUntil);
     if (remainingDays <= 15) return 1; // Red (urgent) rooms second
