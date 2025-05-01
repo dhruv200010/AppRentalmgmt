@@ -1,11 +1,11 @@
 import { initializeApp } from 'firebase/app';
-import { getFirestore, enableIndexedDbPersistence, collection, doc, getDoc, initializeFirestore, CACHE_SIZE_UNLIMITED } from 'firebase/firestore';
+import { getFirestore, enableIndexedDbPersistence, collection, doc, getDoc, initializeFirestore, CACHE_SIZE_UNLIMITED, enableMultiTabIndexedDbPersistence, enableNetwork, disableNetwork } from 'firebase/firestore';
 import { initializeAuth, getReactNativePersistence } from 'firebase/auth';
 import { getAnalytics, isSupported } from 'firebase/analytics';
 import ReactNativeAsyncStorage from '@react-native-async-storage/async-storage';
 
 // Debug Firebase initialization
-console.log('Initializing Firebase...');
+console.log('Starting Firebase initialization...');
 
 // Your Firebase configuration
 const firebaseConfig = {
@@ -19,17 +19,24 @@ const firebaseConfig = {
 };
 
 // Initialize Firebase
+console.log('Initializing Firebase app...');
 const app = initializeApp(firebaseConfig);
-console.log('Firebase app initialized');
+console.log('Firebase app initialized successfully');
 
 // Initialize Firestore with memory cache
+console.log('Initializing Firestore...');
 const db = initializeFirestore(app, {
-  cacheSizeBytes: CACHE_SIZE_UNLIMITED,
-  experimentalForceLongPolling: true
+  experimentalForceLongPolling: true,
+  useFetchStreams: false,
+  cache: {
+    kind: 'memory',
+    size: 100000000 // 100MB cache size
+  }
 });
 console.log('Firestore initialized with memory cache');
 
 // Initialize Auth with AsyncStorage persistence
+console.log('Initializing Firebase Auth...');
 const auth = initializeAuth(app, {
   persistence: getReactNativePersistence(ReactNativeAsyncStorage)
 });
@@ -37,6 +44,7 @@ console.log('Firebase Auth initialized with AsyncStorage');
 
 // Initialize Analytics only if supported
 let analytics = null;
+console.log('Checking Analytics support...');
 isSupported()
   .then(yes => {
     if (yes) {
@@ -50,14 +58,5 @@ isSupported()
     console.error('Error initializing analytics:', err);
   });
 
-// Test Firestore connection
-const testDoc = doc(collection(db, 'test'), 'test');
-getDoc(testDoc)
-  .then(() => {
-    console.log('Firestore connection test successful');
-  })
-  .catch(err => {
-    console.error('Firestore connection test failed:', err);
-  });
-
+// Export with connection status
 export { app, db, auth, analytics }; 
