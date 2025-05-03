@@ -1,6 +1,5 @@
 import { initializeApp } from 'firebase/app';
-import { getFirestore, enableIndexedDbPersistence, collection, doc, getDoc, initializeFirestore, CACHE_SIZE_UNLIMITED, enableMultiTabIndexedDbPersistence, enableNetwork, disableNetwork } from 'firebase/firestore';
-import { initializeAuth, getReactNativePersistence } from 'firebase/auth';
+import { getDatabase, ref, set, get, update, remove, query, orderByChild, equalTo, onValue, off } from 'firebase/database';
 import { getAnalytics, isSupported } from 'firebase/analytics';
 import ReactNativeAsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -15,7 +14,8 @@ const firebaseConfig = {
   storageBucket: "ntmanager-d8562.firebasestorage.app",
   messagingSenderId: "640916639753",
   appId: "1:640916639753:web:1c58de4d6baac4918428d8",
-  measurementId: "G-H6L7N6KLWM"
+  measurementId: "G-H6L7N6KLWM",
+  databaseURL: "https://ntmanager-d8562-default-rtdb.firebaseio.com" // Your Realtime Database URL
 };
 
 // Initialize Firebase
@@ -23,24 +23,10 @@ console.log('Initializing Firebase app...');
 const app = initializeApp(firebaseConfig);
 console.log('Firebase app initialized successfully');
 
-// Initialize Firestore with memory cache
-console.log('Initializing Firestore...');
-const db = initializeFirestore(app, {
-  experimentalForceLongPolling: true,
-  useFetchStreams: false,
-  cache: {
-    kind: 'memory',
-    size: 100000000 // 100MB cache size
-  }
-});
-console.log('Firestore initialized with memory cache');
-
-// Initialize Auth with AsyncStorage persistence
-console.log('Initializing Firebase Auth...');
-const auth = initializeAuth(app, {
-  persistence: getReactNativePersistence(ReactNativeAsyncStorage)
-});
-console.log('Firebase Auth initialized with AsyncStorage');
+// Initialize Realtime Database
+console.log('Initializing Realtime Database...');
+const db = getDatabase(app);
+console.log('Realtime Database initialized successfully');
 
 // Initialize Analytics only if supported
 let analytics = null;
@@ -58,5 +44,4 @@ isSupported()
     console.error('Error initializing analytics:', err);
   });
 
-// Export with connection status
-export { app, db, auth, analytics }; 
+export { app, db, analytics }; 
