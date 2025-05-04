@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -14,6 +14,7 @@ import { Picker } from '@react-native-picker/picker';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { addRoom, updateRoom, deleteRoom } from '../store/slices/propertySlice';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import firebaseService from '../services/firebaseService';
 
 const RoomScreen = ({ route }) => {
   const { propertyId } = route.params;
@@ -30,9 +31,32 @@ const RoomScreen = ({ route }) => {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [occupiedUntil, setOccupiedUntil] = useState(new Date());
   const [isMonthToMonth, setIsMonthToMonth] = useState(false);
+  const [rooms, setRooms] = useState([]);
 
-  // Ensure property.rooms is always an array
-  const rooms = property?.rooms || [];
+  // Set up real-time room listener
+  useEffect(() => {
+    let unsubscribe = null;
+
+    const setupListener = async () => {
+      try {
+        unsubscribe = await firebaseService.getPropertyRooms(propertyId, property.userId, (updatedRooms) => {
+          console.log('Received room update:', updatedRooms);
+          setRooms(updatedRooms);
+        });
+      } catch (error) {
+        console.error('Error setting up room listener:', error);
+      }
+    };
+
+    setupListener();
+
+    return () => {
+      if (unsubscribe && typeof unsubscribe === 'function') {
+        console.log('Cleaning up room listener');
+        unsubscribe();
+      }
+    };
+  }, [propertyId, property.userId]);
 
   const handleAddRoom = () => {
     if (!tenant || !roomType) {
@@ -41,9 +65,9 @@ const RoomScreen = ({ route }) => {
     }
 
     // Check for duplicate room numbers
-    const isDuplicate = property?.rooms?.some(room => 
+    const isDuplicate = rooms.some(room => 
       room.type === roomType && (!editingRoom || room.id !== editingRoom.id)
-    ) || false;
+    );
 
     if (isDuplicate) {
       Alert.alert('Error', `Room number ${roomType} already exists in this property`);
@@ -56,7 +80,11 @@ const RoomScreen = ({ route }) => {
       type: roomType,
       tenant: tenant,
       status: status,
-      occupiedUntil: status === 'Occupied' ? (isMonthToMonth ? 'Month to Month' : occupiedUntil.toISOString()) : null,
+      occupiedUntil: status === 'Occupied' 
+        ? (isMonthToMonth 
+          ? 'Month to Month' 
+          : occupiedUntil.toISOString())
+        : null,
     };
 
     if (editingRoom) {
@@ -80,12 +108,17 @@ const RoomScreen = ({ route }) => {
     setTenant(room.tenant || '');
     setRoomType(room.type);
     setStatus(room.status);
-    setOccupiedUntil(room.occupiedUntil && room.occupiedUntil !== 'Month to Month' ? new Date(room.occupiedUntil) : new Date());
-    setIsMonthToMonth(room.occupiedUntil === 'Month to Month');
+    if (room.occupiedUntil === 'Month to Month') {
+      setIsMonthToMonth(true);
+      setOccupiedUntil(new Date());
+    } else {
+      setIsMonthToMonth(false);
+      setOccupiedUntil(room.occupiedUntil ? new Date(room.occupiedUntil) : new Date());
+    }
     setModalVisible(true);
   };
 
-  const handleDeleteRoom = (roomId) => {
+  const handleDeleteRoom = async (roomId) => {
     Alert.alert(
       'Delete Room',
       'Are you sure you want to delete this room?',
@@ -94,7 +127,15 @@ const RoomScreen = ({ route }) => {
         {
           text: 'Delete',
           style: 'destructive',
-          onPress: () => dispatch(deleteRoom({ propertyId, roomId })),
+          onPress: async () => {
+            try {
+              await firebaseService.deleteRoom(propertyId, roomId);
+              dispatch(deleteRoom({ propertyId, roomId }));
+            } catch (error) {
+              console.error('Error deleting room:', error);
+              Alert.alert('Error', 'Failed to delete room. Please try again.');
+            }
+          },
         },
       ]
     );
@@ -124,10 +165,13 @@ const RoomScreen = ({ route }) => {
       </View>
       <Text style={styles.roomType}>Room: {item.type}</Text>
       <Text style={styles.roomStatus}>Status: {item.status}</Text>
-      {item.occupiedUntil && (
+      {item.occupiedUntil && item.occupiedUntil !== 'Month to Month' && (
         <Text style={styles.occupiedUntil}>
           Until: {new Date(item.occupiedUntil).toLocaleDateString()}
         </Text>
+      )}
+      {item.occupiedUntil === 'Month to Month' && (
+        <Text style={styles.occupiedUntil}>Month to Month</Text>
       )}
     </View>
   );
@@ -149,6 +193,7 @@ const RoomScreen = ({ route }) => {
         renderItem={renderRoom}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listContainer}
+        extraData={rooms}
       />
 
       <Modal

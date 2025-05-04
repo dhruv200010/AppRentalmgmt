@@ -62,9 +62,10 @@ const DashboardScreen = ({ navigation }) => {
   const error = useSelector((state) => state.properties.error);
   const [propertyModalVisible, setPropertyModalVisible] = useState(false);
   const [propertyName, setPropertyName] = useState('');
-  const [completedAlerts, setCompletedAlerts] = useState({}); // Track completed alerts
-  const [archivedAlerts, setArchivedAlerts] = useState([]); // Track archived alerts
-  const [showArchived, setShowArchived] = useState(false); // Track if we're showing archived alerts
+  const [completedAlerts, setCompletedAlerts] = useState({});
+  const [archivedAlerts, setArchivedAlerts] = useState([]);
+  const [showArchived, setShowArchived] = useState(false);
+  const [propertyRooms, setPropertyRooms] = useState({}); // Add state for property rooms
 
   // Lead modal state
   const [leadModalVisible, setLeadModalVisible] = useState(false);
@@ -97,6 +98,41 @@ const DashboardScreen = ({ navigation }) => {
   const lastScale = useRef(1);
   const pinchRef = useRef(null);
   const [alertFilter, setAlertFilter] = useState('all'); // Add this line for alert filter state
+
+  // Add useEffect for room listeners
+  useEffect(() => {
+    const unsubscribes = {};
+
+    const setupRoomListeners = async () => {
+      for (const property of properties) {
+        if (!property.id || !property.userId) continue;
+
+        try {
+          const unsubscribe = await firebaseService.getPropertyRooms(property.id, property.userId, (rooms) => {
+            setPropertyRooms(prev => ({
+              ...prev,
+              [property.id]: rooms
+            }));
+          });
+
+          unsubscribes[property.id] = unsubscribe;
+        } catch (error) {
+          console.error(`Error setting up room listener for property ${property.id}:`, error);
+        }
+      }
+    };
+
+    setupRoomListeners();
+
+    return () => {
+      // Cleanup all room listeners
+      Object.values(unsubscribes).forEach(unsubscribe => {
+        if (unsubscribe && typeof unsubscribe === 'function') {
+          unsubscribe();
+        }
+      });
+    };
+  }, [properties]);
 
   useEffect(() => {
     const loadProperties = async () => {
@@ -264,8 +300,8 @@ const DashboardScreen = ({ navigation }) => {
   const renderProperty = (property) => {
     if (!property) return null;
     
-    const rooms = property.rooms || [];
-    const vacantRooms = rooms.filter(r => r.status === 'Vacant');
+    const rooms = propertyRooms[property.id] || property.rooms || [];
+    const vacantRooms = rooms.filter(r => r && r.status === 'Vacant');
     
     return (
       <View key={property.id} style={styles.propertyCard}>
