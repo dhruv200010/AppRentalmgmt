@@ -18,7 +18,7 @@ import {
   Dimensions,
 } from 'react-native';
 import { useSelector, useDispatch } from 'react-redux';
-import { deleteProperty, addProperty } from '../store/slices/propertySlice';
+import { deleteProperty, addProperty, loadProperties, setProperties } from '../store/slices/propertySlice';
 import { addLead, updateLead, deleteLead, addResponse, rescheduleAlert, deleteResponse } from '../store/slices/leadSlice';
 import { Picker } from '@react-native-picker/picker';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -27,7 +27,8 @@ import * as Notifications from 'expo-notifications';
 import * as Clipboard from 'expo-clipboard';
 import * as ImagePicker from 'expo-image-picker';
 import { PinchGestureHandler, State, GestureHandlerRootView } from 'react-native-gesture-handler';
-import { useAuth } from '@clerk/clerk-expo';
+import { auth } from '../config/firebase';
+import firebaseService from '../services/firebaseService';
 
 // Configure notifications
 Notifications.setNotificationHandler({
@@ -50,13 +51,15 @@ Notifications.setNotificationCategoryAsync('lead', [
 ]);
 
 const DashboardScreen = ({ navigation }) => {
-  const { signOut } = useAuth();
-  const properties = useSelector((state) => state.properties.properties);
-  const leads = useSelector((state) => state.leads.leads);
-  const sources = useSelector((state) => state.leads.sources);
-  const categories = useSelector((state) => state.leads.categories);
-  const locations = useSelector((state) => state.leads.locations);
   const dispatch = useDispatch();
+  const userId = auth.currentUser?.uid;
+  const properties = useSelector((state) => state.properties.properties || []);
+  const leads = useSelector((state) => state.leads.leads || []);
+  const sources = useSelector((state) => state.leads.sources || []);
+  const categories = useSelector((state) => state.leads.categories || []);
+  const locations = useSelector((state) => state.leads.locations || []);
+  const loading = useSelector((state) => state.properties.loading);
+  const error = useSelector((state) => state.properties.error);
   const [propertyModalVisible, setPropertyModalVisible] = useState(false);
   const [propertyName, setPropertyName] = useState('');
   const [completedAlerts, setCompletedAlerts] = useState({}); // Track completed alerts
@@ -95,13 +98,40 @@ const DashboardScreen = ({ navigation }) => {
   const pinchRef = useRef(null);
   const [alertFilter, setAlertFilter] = useState('all'); // Add this line for alert filter state
 
+  useEffect(() => {
+    const loadProperties = async () => {
+      if (!userId) return;
+      
+      try {
+        console.log('Setting up real-time property listener...');
+        const unsubscribe = await firebaseService.getProperties(userId, (properties) => {
+          console.log('Received real-time property update:', properties);
+          dispatch(setProperties(properties));
+        });
+        
+        // Cleanup function to remove the listener when component unmounts
+        return () => {
+          console.log('Cleaning up property listener...');
+          unsubscribe();
+        };
+      } catch (error) {
+        console.error('Error setting up property listener:', error);
+      }
+    };
+
+    loadProperties();
+  }, [userId, dispatch]);
+
   const handleAddProperty = () => {
     if (!propertyName.trim()) {
       Alert.alert('Error', 'Please enter a property name');
       return;
     }
 
-    dispatch(addProperty({ name: propertyName.trim() }));
+    dispatch(addProperty({ 
+      name: propertyName.trim(),
+      userId: userId 
+    }));
     setPropertyName('');
     setPropertyModalVisible(false);
   };
@@ -115,7 +145,21 @@ const DashboardScreen = ({ navigation }) => {
         {
           text: 'Delete',
           style: 'destructive',
-          onPress: () => dispatch(deleteProperty(propertyId)),
+          onPress: async () => {
+            try {
+              // First, delete from Firebase
+              if (userId) {
+                await firebaseService.deleteProperty(propertyId, userId);
+                console.log('✅ Property deleted from Firebase');
+              }
+              
+              // Then update Redux state
+              dispatch(deleteProperty(propertyId));
+            } catch (error) {
+              console.error('Error deleting property:', error);
+              Alert.alert('Error', 'Failed to delete property. Please try again.');
+            }
+          },
         },
       ]
     );
@@ -217,37 +261,52 @@ const DashboardScreen = ({ navigation }) => {
     );
   };
 
-  const renderProperty = (property) => (
-    <View key={property.id} style={styles.propertyCard}>
-      <View style={styles.propertyHeader}>
-        <View style={styles.propertyInfo}>
-          <Text style={styles.propertyName}>{property.name}</Text>
-          <Text style={styles.roomCount}>
-            {property.rooms.length} room{property.rooms.length !== 1 ? 's' : ''} • {
-              property.rooms.filter(r => r.status === 'Vacant').length
-            } vacant
-          </Text>
+  const renderProperty = (property) => {
+    if (!property) return null;
+    
+    const rooms = property.rooms || [];
+    const vacantRooms = rooms.filter(r => r.status === 'Vacant');
+    
+    return (
+      <View key={property.id} style={styles.propertyCard}>
+        <View style={styles.propertyHeader}>
+          <View style={styles.propertyInfo}>
+            <Text style={styles.propertyName}>{property.name}</Text>
+            <Text style={styles.roomCount}>
+              {rooms.length} room{rooms.length !== 1 ? 's' : ''} • {vacantRooms.length} vacant
+            </Text>
+          </View>
+          <View style={styles.actionButtons}>
+            <TouchableOpacity
+              key={`edit-${property.id}`}
+              onPress={() => navigation.navigate('Room', { propertyId: property.id })}
+            >
+              <Icon name="pencil" size={24} color="#007AFF" />
+            </TouchableOpacity>
+            <TouchableOpacity 
+              key={`delete-${property.id}`}
+              onPress={() => handleDeleteProperty(property.id)}
+            >
+              <Icon name="delete" size={24} color="#FF3B30" />
+            </TouchableOpacity>
+          </View>
         </View>
-        <View style={styles.actionButtons}>
-          <TouchableOpacity
-            onPress={() => navigation.navigate('Room', { propertyId: property.id })}
-          >
-            <Icon name="pencil" size={24} color="#007AFF" />
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => handleDeleteProperty(property.id)}>
-            <Icon name="delete" size={24} color="#FF3B30" />
-          </TouchableOpacity>
-        </View>
+        {rooms.length > 0 && (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            <View style={styles.roomsContainer}>
+              {[...rooms]
+                .sort((a, b) => getRoomSortOrder(a) - getRoomSortOrder(b))
+                .map((room, index) => (
+                  <View key={`${property.id}-room-${room.id || index}`}>
+                    {renderRoomStatus(room)}
+                  </View>
+                ))}
+            </View>
+          </ScrollView>
+        )}
       </View>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-        <View style={styles.roomsContainer}>
-          {[...property.rooms]
-            .sort((a, b) => getRoomSortOrder(a) - getRoomSortOrder(b))
-            .map(renderRoomStatus)}
-        </View>
-      </ScrollView>
-    </View>
-  );
+    );
+  };
 
   const scheduleNotification = async (lead, leadId) => {
     try {
@@ -1788,10 +1847,10 @@ const DashboardScreen = ({ navigation }) => {
 
   const handleSignOut = async () => {
     try {
-      await signOut();
+      await firebaseService.signOut();
       navigation.replace('Login');
-    } catch (err) {
-      console.error('Error signing out:', err);
+    } catch (error) {
+      Alert.alert('Error', error.message);
     }
   };
 

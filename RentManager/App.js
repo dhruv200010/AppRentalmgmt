@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { SafeAreaView, StatusBar, StyleSheet, Text } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -10,158 +10,83 @@ import RoomScreen from './src/screens/RoomScreen';
 import LoginScreen from './src/screens/LoginScreen';
 import { enableScreens } from 'react-native-screens';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { ClerkProvider, SignedIn, SignedOut, useAuth } from '@clerk/clerk-expo';
-import Constants from 'expo-constants';
-import * as SecureStore from 'expo-secure-store';
-import 'react-native-gesture-handler';
-import { app, auth } from './src/config/firebase';
+import { onAuthStateChanged } from 'firebase/auth';
+import { auth } from './src/config/firebase';
 import firebaseService from './src/services/firebaseService';
-
-// Debug environment variables
-console.log('Environment Variables:', {
-  EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY: process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY,
-  Constants: Constants.expoConfig.extra
-});
 
 // Enable native screens for better performance
 enableScreens();
 
 const Stack = createNativeStackNavigator();
 
-const tokenCache = {
-  async getToken(key) {
-    try {
-      return SecureStore.getItemAsync(key);
-    } catch (err) {
-      return null;
-    }
-  },
-  async saveToken(key, value) {
-    try {
-      return SecureStore.setItemAsync(key, value);
-    } catch (err) {
-      return;
-    }
-  },
-};
-
 function NavigationContent() {
-  const { isSignedIn, userId } = useAuth();
+  const [isSignedIn, setIsSignedIn] = useState(false);
+  const [userId, setUserId] = useState(null);
 
-  // Sync user data with Firebase when signed in
   useEffect(() => {
-    if (isSignedIn && userId) {
-      const syncUserData = async () => {
-        try {
-          const userData = await firebaseService.getUserData(userId);
-          if (!userData) {
-            // Initialize user data in Firebase if it doesn't exist
-            await firebaseService.setUserData(userId, {
-              createdAt: new Date().toISOString(),
-              lastLogin: new Date().toISOString()
-            });
-          } else {
-            // Update last login time
-            await firebaseService.setUserData(userId, {
-              lastLogin: new Date().toISOString()
-            });
-          }
-        } catch (error) {
-          console.error('Error syncing user data:', error);
-        }
-      };
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        setIsSignedIn(true);
+        setUserId(user.uid);
+        // Sync user data when signed in
+        firebaseService.getUserData(user.uid);
+      } else {
+        setIsSignedIn(false);
+        setUserId(null);
+      }
+    });
 
-      syncUserData();
-    }
-  }, [isSignedIn, userId]);
+    return () => unsubscribe();
+  }, []);
 
   return (
-    <Stack.Navigator 
-      initialRouteName={isSignedIn ? "Dashboard" : "Login"}
-      screenOptions={{
-        headerStyle: {
-          backgroundColor: '#f5f5f5',
-        },
-        headerTintColor: '#000',
-        headerTitleStyle: {
-          fontWeight: 'bold',
-        },
-        contentStyle: {
-          backgroundColor: '#f5f5f5',
-        },
-        animation: 'default',
-      }}
-    >
-      <Stack.Screen 
-        name="Login" 
-        component={LoginScreen}
-        options={{ headerShown: false }}
-      />
-      <Stack.Screen 
-        name="Dashboard" 
-        component={DashboardScreen}
-        options={{ 
-          title: 'Rent Manager'
-        }}
-      />
-      <Stack.Screen 
-        name="Property" 
-        component={PropertyScreen}
-        options={{ title: 'Property Details' }}
-      />
-      <Stack.Screen 
-        name="Room" 
-        component={RoomScreen}
-        options={{ title: 'Room Details' }}
-      />
-    </Stack.Navigator>
+    <NavigationContainer>
+      <Stack.Navigator>
+        {isSignedIn ? (
+          <>
+            <Stack.Screen 
+              name="Dashboard" 
+              component={DashboardScreen}
+              options={{ headerShown: false }}
+            />
+            <Stack.Screen 
+              name="Property" 
+              component={PropertyScreen}
+              options={{ headerShown: false }}
+            />
+            <Stack.Screen 
+              name="Room" 
+              component={RoomScreen}
+              options={{ headerShown: false }}
+            />
+          </>
+        ) : (
+          <Stack.Screen 
+            name="Login" 
+            component={LoginScreen}
+            options={{ headerShown: false }}
+          />
+        )}
+      </Stack.Navigator>
+    </NavigationContainer>
   );
 }
 
 export default function App() {
-  // Get the publishable key from Constants
-  const publishableKey = Constants.expoConfig.extra.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY;
-  
-  // Debug the key
-  console.log('Publishable Key:', publishableKey);
-  
-  if (!publishableKey) {
-    console.error('Clerk publishable key is missing!');
-    return (
-      <SafeAreaView style={styles.container}>
-        <StatusBar barStyle="dark-content" />
-        <Text>Error: Clerk publishable key is missing. Please check your configuration.</Text>
-      </SafeAreaView>
-    );
-  }
-
   return (
-    <ClerkProvider 
-      publishableKey={publishableKey}
-      tokenCache={tokenCache}
-    >
-      <GestureHandlerRootView style={{ flex: 1 }}>
-        <Provider store={store}>
-          <SafeAreaView style={styles.container}>
-            <StatusBar barStyle="dark-content" />
-            <NavigationContainer>
-              <SignedIn>
-                <NavigationContent />
-              </SignedIn>
-              <SignedOut>
-                <NavigationContent />
-              </SignedOut>
-            </NavigationContainer>
-          </SafeAreaView>
-        </Provider>
-      </GestureHandlerRootView>
-    </ClerkProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <Provider store={store}>
+        <SafeAreaView style={styles.container}>
+          <StatusBar barStyle="dark-content" />
+          <NavigationContent />
+        </SafeAreaView>
+      </Provider>
+    </GestureHandlerRootView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
   },
 }); 

@@ -1,20 +1,15 @@
 import React from 'react';
 import { TouchableOpacity, Text, StyleSheet, Alert } from 'react-native';
-import { useAuth } from '@clerk/clerk-expo';
 import { useNavigation } from '@react-navigation/native';
+import firebaseService from '../services/firebaseService';
 
 const SignOutButton = () => {
-  const { isLoaded, signOut } = useAuth();
   const navigation = useNavigation();
-  
-  if (!isLoaded) {
-    return null;
-  }
   
   const handleSignOut = async () => {
     try {
       console.log('Starting sign out process...');
-      await signOut();
+      await firebaseService.signOut();
       console.log('Sign out successful');
       // Navigate to Login screen after successful sign out
       navigation.reset({
@@ -50,10 +45,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#f0f0f0',
   },
   buttonText: {
-    color: '#007AFF',
     fontSize: 16,
-    fontWeight: '500',
-  }
+    color: '#333',
+  },
 });
 
 export default SignOutButton; 

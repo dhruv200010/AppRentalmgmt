@@ -1,17 +1,17 @@
 import React, { useState } from 'react';
 import { View, Text, Button, StyleSheet } from 'react-native';
-import { useAuth } from '@clerk/clerk-expo';
 import { useNavigation } from '@react-navigation/native';
+import { auth } from '../config/firebase';
+import firebaseService from '../services/firebaseService';
 
 const AuthTest = () => {
-  const { isLoaded, isSignedIn, signOut, userId } = useAuth();
   const [status, setStatus] = useState('');
   const navigation = useNavigation();
 
   const handleSignOut = async () => {
     try {
       setStatus('Signing out...');
-      await signOut();
+      await firebaseService.signOut();
       setStatus('Sign out successful');
       // Navigate to Login screen after successful sign out
       navigation.reset({
@@ -26,9 +26,8 @@ const AuthTest = () => {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.text}>Auth Status: {isLoaded ? 'Loaded' : 'Loading...'}</Text>
-      <Text style={styles.text}>Signed In: {isSignedIn ? 'Yes' : 'No'}</Text>
-      {userId && <Text style={styles.text}>User ID: {userId}</Text>}
+      <Text style={styles.text}>Auth Status: {auth.currentUser ? 'Signed In' : 'Signed Out'}</Text>
+      {auth.currentUser && <Text style={styles.text}>User ID: {auth.currentUser.uid}</Text>}
       <Text style={styles.status}>{status}</Text>
       <Button 
         title="Test Sign Out" 
@@ -51,8 +50,8 @@ const styles = StyleSheet.create({
   },
   status: {
     fontSize: 16,
-    marginVertical: 10,
-    color: 'blue',
+    marginTop: 8,
+    color: '#666',
   },
 });
 

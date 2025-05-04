@@ -1,7 +1,7 @@
-import { db } from '../config/firebase';
-import { ref, set, get, update, remove, query, orderByChild, equalTo, onValue, off } from 'firebase/database';
+import { db, auth } from '../config/firebase';
+import { ref, set, get, update, remove, query, orderByChild, equalTo, onValue, off, push } from 'firebase/database';
+import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from 'firebase/auth';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useAuth } from '@clerk/clerk-expo';
 
 class FirebaseService {
   constructor() {
@@ -18,11 +18,44 @@ class FirebaseService {
     }
   }
 
-  // Get user data
-  async getUserData(clerkUserId) {
-    console.log('Getting user data for Clerk user:', clerkUserId);
+  // Authentication methods
+  async signIn(email, password) {
     try {
-      const userRef = ref(db, `users/${clerkUserId}`);
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      console.log('User signed in successfully:', userCredential.user.uid);
+      return userCredential.user;
+    } catch (error) {
+      console.error('Error signing in:', error);
+      throw error;
+    }
+  }
+
+  async signUp(email, password) {
+    try {
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      console.log('User created successfully:', userCredential.user.uid);
+      return userCredential.user;
+    } catch (error) {
+      console.error('Error signing up:', error);
+      throw error;
+    }
+  }
+
+  async signOut() {
+    try {
+      await signOut(auth);
+      console.log('User signed out successfully');
+    } catch (error) {
+      console.error('Error signing out:', error);
+      throw error;
+    }
+  }
+
+  // Get user data
+  async getUserData(userId) {
+    console.log('Getting user data for user:', userId);
+    try {
+      const userRef = ref(db, `users/${userId}`);
       const snapshot = await get(userRef);
       
       if (!snapshot.exists()) {
@@ -30,9 +63,9 @@ class FirebaseService {
         const initialData = {
           createdAt: new Date().toISOString(),
           lastLogin: new Date().toISOString(),
-          clerkUserId
+          userId
         };
-        await this.setUserData(clerkUserId, initialData);
+        await this.setUserData(userId, initialData);
         return initialData;
       }
       
@@ -40,14 +73,14 @@ class FirebaseService {
       console.log('Retrieved user data:', data);
       
       // Store in local storage for offline access
-      await AsyncStorage.setItem(`user_${clerkUserId}`, JSON.stringify(data));
+      await AsyncStorage.setItem(`user_${userId}`, JSON.stringify(data));
       return data;
     } catch (error) {
       console.error('Error getting user data:', error);
       
       // Try to get data from local storage if offline
       try {
-        const localData = await AsyncStorage.getItem(`user_${clerkUserId}`);
+        const localData = await AsyncStorage.getItem(`user_${userId}`);
         if (localData) {
           console.log('Retrieved user data from local storage');
           return JSON.parse(localData);
@@ -60,136 +93,191 @@ class FirebaseService {
       return {
         createdAt: new Date().toISOString(),
         lastLogin: new Date().toISOString(),
-        clerkUserId
+        userId
       };
     }
   }
 
   // Create or update user data
-  async setUserData(clerkUserId, data) {
-    console.log('Setting user data for Clerk user:', clerkUserId);
+  async setUserData(userId, data) {
+    console.log('Setting user data for user:', userId);
     console.log('Data to set:', data);
     
     try {
       const userData = {
         ...data,
-        clerkUserId,
+        userId,
         updatedAt: new Date().toISOString()
       };
       
-      await set(ref(db, `users/${clerkUserId}`), userData);
+      await set(ref(db, `users/${userId}`), userData);
       console.log('User data set successfully');
       
       // Also store in local storage for offline access
-      await AsyncStorage.setItem(`user_${clerkUserId}`, JSON.stringify(userData));
+      await AsyncStorage.setItem(`user_${userId}`, JSON.stringify(userData));
     } catch (error) {
       console.error('Error setting user data:', error);
       
       // Store in local storage if offline
       console.log('Storing data locally due to offline state');
-      await AsyncStorage.setItem(`user_${clerkUserId}`, JSON.stringify(data));
+      await AsyncStorage.setItem(`user_${userId}`, JSON.stringify(data));
     }
   }
 
-  // Get properties for a specific user
-  async getProperties(clerkUserId) {
-    console.log('Getting properties for Clerk user:', clerkUserId);
+  // Get properties for a specific user with real-time updates
+  async getProperties(userId, callback) {
+    console.log('=== Property Retrieval Start ===');
+    console.log('User ID:', userId);
+    
     try {
+      console.log('Setting up real-time listener for properties...');
       const propertiesRef = ref(db, 'properties');
-      const propertiesQuery = query(propertiesRef, orderByChild('clerkUserId'), equalTo(clerkUserId));
-      const snapshot = await get(propertiesQuery);
       
-      let properties = [];
-      if (snapshot.exists()) {
-        properties = Object.entries(snapshot.val()).map(([id, data]) => ({
-          id,
-          ...data,
-          clerkUserId
-        }));
-      }
-      
-      console.log('Retrieved properties:', properties);
-      
-      // Store in local storage for offline access
-      await AsyncStorage.setItem(`properties_${clerkUserId}`, JSON.stringify(properties));
-      return properties;
-    } catch (error) {
-      console.error('Error getting properties:', error);
-      
-      // Try to get data from local storage if offline
-      try {
-        const localData = await AsyncStorage.getItem(`properties_${clerkUserId}`);
-        if (localData) {
-          console.log('Retrieved properties from local storage');
-          return JSON.parse(localData);
+      // Set up real-time listener
+      const unsubscribe = onValue(propertiesRef, async (snapshot) => {
+        if (!snapshot.exists()) {
+          console.log('No properties found in Firebase');
+          callback([]);
+          return;
         }
-      } catch (localError) {
-        console.error('Error getting properties from local storage:', localError);
-      }
+        
+        const properties = [];
+        snapshot.forEach((childSnapshot) => {
+          const property = childSnapshot.val();
+          if (property.userId === userId) {
+            properties.push({
+              id: childSnapshot.key,
+              ...property
+            });
+          }
+        });
+        
+        console.log(`✅ Real-time update: ${properties.length} properties`);
+        console.log('Properties updated:', JSON.stringify(properties, null, 2));
+        
+        // Update local storage with fresh data
+        console.log('Updating local storage with fresh data...');
+        await AsyncStorage.setItem(`properties_${userId}`, JSON.stringify(properties));
+        console.log('✅ Successfully updated local storage');
+        
+        // Call the callback with the updated properties
+        callback(properties);
+      }, (error) => {
+        console.error('❌ Error in real-time listener:', error);
+        // Try to get data from local storage on error
+        this.getPropertiesFromLocalStorage(userId, callback);
+      });
       
-      console.log('Returning empty array due to offline state');
-      return [];
+      console.log('=== Property Real-time Listener Setup Complete ===');
+      return unsubscribe; // Return the unsubscribe function to clean up later
+    } catch (error) {
+      console.error('❌ Error setting up real-time listener:', error);
+      // Fall back to local storage
+      return this.getPropertiesFromLocalStorage(userId, callback);
     }
   }
 
-  // Add or update a property
-  async setProperty(clerkUserId, propertyId, data) {
-    console.log('Setting property:', propertyId);
-    console.log('Property data:', data);
+  // Helper method to get properties from local storage
+  async getPropertiesFromLocalStorage(userId, callback) {
+    console.log('Attempting to retrieve properties from local storage...');
+    try {
+      const localData = await AsyncStorage.getItem(`properties_${userId}`);
+      if (localData) {
+        const properties = JSON.parse(localData);
+        console.log(`✅ Successfully retrieved ${properties.length} properties from local storage`);
+        callback(properties);
+        return () => {}; // Return empty cleanup function
+      }
+    } catch (localError) {
+      console.error('❌ Error getting data from local storage:', localError);
+    }
+    
+    console.log('No properties found in local storage');
+    callback([]);
+    return () => {}; // Return empty cleanup function
+  }
+
+  // Add or update a property with real-time sync
+  async setProperty(userId, propertyId, data) {
+    console.log('=== Property Creation/Update Start ===');
+    console.log('User ID:', userId);
+    console.log('Property ID:', propertyId);
+    console.log('Property data to be saved:', JSON.stringify(data, null, 2));
     
     try {
       const propertyData = {
         ...data,
-        clerkUserId,
+        userId,
         updatedAt: new Date().toISOString()
       };
       
-      await set(ref(db, `properties/${propertyId}`), propertyData);
-      console.log('Property set successfully');
+      const propertyRef = ref(db, `properties/${propertyId}`);
+      await set(propertyRef, propertyData);
       
-      // Update local storage
-      const properties = await this.getProperties(clerkUserId);
-      const updatedProperties = properties.filter(p => p.id !== propertyId);
-      updatedProperties.push({ id: propertyId, ...propertyData });
-      await AsyncStorage.setItem(`properties_${clerkUserId}`, JSON.stringify(updatedProperties));
+      console.log('✅ Property saved successfully');
+      console.log('=== Property Creation/Update Complete ===');
     } catch (error) {
-      console.error('Error setting property:', error);
-      
-      // Store in local storage if offline
-      console.log('Storing property data locally due to offline state');
-      const properties = await this.getProperties(clerkUserId);
-      const updatedProperties = properties.filter(p => p.id !== propertyId);
-      updatedProperties.push({ id: propertyId, ...data, clerkUserId });
-      await AsyncStorage.setItem(`properties_${clerkUserId}`, JSON.stringify(updatedProperties));
+      console.error('❌ Error saving property:', error);
+      throw error;
     }
   }
 
   // Delete a property
-  async deleteProperty(propertyId, clerkUserId) {
-    console.log('Deleting property:', propertyId);
+  async deleteProperty(propertyId, userId) {
+    console.log('=== Property Deletion Start ===');
+    console.log('Property ID:', propertyId);
+    console.log('User ID:', userId);
+    
+    // Ensure we're working with plain strings
+    const plainPropertyId = String(propertyId);
+    const plainUserId = String(userId);
+    
     try {
-      await remove(ref(db, `properties/${propertyId}`));
-      console.log('Property deleted successfully');
+      // Create a plain Firebase reference
+      const propertyRef = ref(db, `properties/${plainPropertyId}`);
       
-      // Update local storage
-      const properties = await this.getProperties(clerkUserId);
-      const updatedProperties = properties.filter(p => p.id !== propertyId);
-      await AsyncStorage.setItem(`properties_${clerkUserId}`, JSON.stringify(updatedProperties));
+      // Delete from Firebase using the plain reference
+      await remove(propertyRef);
+      console.log('✅ Property deleted successfully from Firebase');
+      
+      // Update local storage with plain values
+      try {
+        const localData = await AsyncStorage.getItem(`properties_${plainUserId}`);
+        if (localData) {
+          const properties = JSON.parse(localData);
+          // Ensure we're comparing plain strings
+          const updatedProperties = properties.filter(p => String(p.id) !== plainPropertyId);
+          await AsyncStorage.setItem(`properties_${plainUserId}`, JSON.stringify(updatedProperties));
+          console.log('✅ Local storage updated successfully');
+        }
+      } catch (localError) {
+        console.error('❌ Error updating local storage:', localError);
+      }
     } catch (error) {
-      console.error('Error deleting property:', error);
+      console.error('❌ Error deleting from Firebase:', error);
       
-      // Update local storage if offline
-      console.log('Property deletion queued for when online');
-      const properties = await this.getProperties(clerkUserId);
-      const updatedProperties = properties.filter(p => p.id !== propertyId);
-      await AsyncStorage.setItem(`properties_${clerkUserId}`, JSON.stringify(updatedProperties));
+      // If Firebase deletion fails, still try to update local storage
+      try {
+        const localData = await AsyncStorage.getItem(`properties_${plainUserId}`);
+        if (localData) {
+          const properties = JSON.parse(localData);
+          // Ensure we're comparing plain strings
+          const updatedProperties = properties.filter(p => String(p.id) !== plainPropertyId);
+          await AsyncStorage.setItem(`properties_${plainUserId}`, JSON.stringify(updatedProperties));
+          console.log('✅ Local storage updated for offline deletion');
+        }
+      } catch (localError) {
+        console.error('❌ Error updating local storage for offline deletion:', localError);
+      }
     }
+    
+    console.log('=== Property Deletion Complete ===');
   }
 
   // Listen to real-time updates for properties
-  listenToProperties(clerkUserId, callback) {
+  listenToProperties(userId, callback) {
     const propertiesRef = ref(db, 'properties');
-    const propertiesQuery = query(propertiesRef, orderByChild('clerkUserId'), equalTo(clerkUserId));
+    const propertiesQuery = query(propertiesRef, orderByChild('userId'), equalTo(userId));
     
     const listener = onValue(propertiesQuery, (snapshot) => {
       let properties = [];
@@ -197,7 +285,7 @@ class FirebaseService {
         properties = Object.entries(snapshot.val()).map(([id, data]) => ({
           id,
           ...data,
-          clerkUserId
+          userId
         }));
       }
       callback(properties);
@@ -214,280 +302,123 @@ class FirebaseService {
       const propertiesQuery = query(propertiesRef, orderByChild('userId'), equalTo(userId));
       const snapshot = await get(propertiesQuery);
       
-      let properties = [];
-      if (snapshot.exists()) {
-        properties = Object.entries(snapshot.val()).map(([id, data]) => ({
-          id,
-          ...data,
-          userId
-        }));
+      if (!snapshot.exists()) {
+        console.log('No properties found for user');
+        return [];
       }
       
-      console.log('Retrieved properties:', properties);
+      const properties = [];
+      snapshot.forEach((childSnapshot) => {
+        properties.push({
+          id: childSnapshot.key,
+          ...childSnapshot.val()
+        });
+      });
       
-      // Store in local storage for offline access
-      await AsyncStorage.setItem(`properties_${userId}`, JSON.stringify(properties));
+      console.log(`Found ${properties.length} properties for user`);
       return properties;
     } catch (error) {
       console.error('Error getting user properties:', error);
-      console.error('Error code:', error.code);
-      console.error('Error message:', error.message);
-      
-      if (error.code === 'unavailable' || error.code === 'permission-denied') {
-        console.log('Attempting to get properties from local storage...');
-        try {
-          const localData = await AsyncStorage.getItem(`properties_${userId}`);
-          if (localData) {
-            console.log('Retrieved properties from local storage');
-            return JSON.parse(localData);
-          }
-        } catch (localError) {
-          console.error('Error getting properties from local storage:', localError);
-        }
-        
-        console.log('Returning empty array due to offline state');
-        return [];
-      }
       throw error;
     }
   }
 
-  // Add or update a property
-  async setProperty(userId, propertyId, data) {
-    console.log('Setting property:', propertyId);
-    console.log('Property data:', data);
-    
-    try {
-      await set(ref(db, `properties/${propertyId}/userId`), userId);
-      await set(ref(db, `properties/${propertyId}/updatedAt`), new Date().toISOString());
-      console.log('Property set successfully');
-      
-      // Update local storage
-      const properties = await this.getUserProperties(userId);
-      const updatedProperties = properties.filter(p => p.id !== propertyId);
-      updatedProperties.push({ id: propertyId, ...data, userId });
-      await AsyncStorage.setItem(`properties_${userId}`, JSON.stringify(updatedProperties));
-    } catch (error) {
-      console.error('Error setting property:', error);
-      console.error('Error code:', error.code);
-      console.error('Error message:', error.message);
-      
-      if (error.code === 'unavailable' || error.code === 'permission-denied') {
-        console.log('Storing data locally due to offline state');
-        const properties = await this.getUserProperties(userId);
-        const updatedProperties = properties.filter(p => p.id !== propertyId);
-        updatedProperties.push({ id: propertyId, ...data, userId });
-        await AsyncStorage.setItem(`properties_${userId}`, JSON.stringify(updatedProperties));
-        return;
-      }
-      throw error;
-    }
-  }
-
-  // Delete a property
-  async deleteProperty(propertyId, userId) {
-    console.log('Deleting property:', propertyId);
-    try {
-      await remove(ref(db, `properties/${propertyId}/userId`));
-      await remove(ref(db, `properties/${propertyId}/updatedAt`));
-      console.log('Property deleted successfully');
-      
-      // Update local storage
-      const properties = await this.getUserProperties(userId);
-      const updatedProperties = properties.filter(p => p.id !== propertyId);
-      await AsyncStorage.setItem(`properties_${userId}`, JSON.stringify(updatedProperties));
-    } catch (error) {
-      console.error('Error deleting property:', error);
-      console.error('Error code:', error.code);
-      console.error('Error message:', error.message);
-      
-      if (error.code === 'unavailable' || error.code === 'permission-denied') {
-        console.log('Property deletion queued for when online');
-        const properties = await this.getUserProperties(userId);
-        const updatedProperties = properties.filter(p => p.id !== propertyId);
-        await AsyncStorage.setItem(`properties_${userId}`, JSON.stringify(updatedProperties));
-        return;
-      }
-      throw error;
-    }
-  }
-
-  // Get all rooms for a user
-  async getUserRooms(userId) {
-    console.log('Getting rooms for user:', userId);
-    try {
-      const roomsRef = ref(db, 'rooms');
-      const roomsQuery = query(roomsRef, orderByChild('userId'), equalTo(userId));
-      const snapshot = await get(roomsQuery);
-      
-      let rooms = [];
-      if (snapshot.exists()) {
-        rooms = Object.entries(snapshot.val()).map(([id, data]) => ({
-          id,
-          ...data,
-          userId
-        }));
-      }
-      
-      console.log('Retrieved rooms:', rooms);
-      
-      // Store in local storage for offline access
-      await AsyncStorage.setItem(`rooms_${userId}`, JSON.stringify(rooms));
-      return rooms;
-    } catch (error) {
-      console.error('Error getting user rooms:', error);
-      console.error('Error code:', error.code);
-      console.error('Error message:', error.message);
-      
-      if (error.code === 'unavailable' || error.code === 'permission-denied') {
-        console.log('Attempting to get rooms from local storage...');
-        try {
-          const localData = await AsyncStorage.getItem(`rooms_${userId}`);
-          if (localData) {
-            console.log('Retrieved rooms from local storage');
-            return JSON.parse(localData);
-          }
-        } catch (localError) {
-          console.error('Error getting rooms from local storage:', localError);
-        }
-        
-        console.log('Returning empty array due to offline state');
-        return [];
-      }
-      throw error;
-    }
-  }
-
-  // Get all rooms for a property
+  // Get rooms for a specific property
   async getPropertyRooms(propertyId, userId) {
     console.log('Getting rooms for property:', propertyId);
     try {
       const roomsRef = ref(db, 'rooms');
       const roomsQuery = query(roomsRef, orderByChild('propertyId'), equalTo(propertyId));
-      const roomsQueryWithUserId = query(roomsQuery, orderByChild('userId'), equalTo(userId));
-      const snapshot = await get(roomsQueryWithUserId);
+      const snapshot = await get(roomsQuery);
       
-      let rooms = [];
-      if (snapshot.exists()) {
-        rooms = Object.entries(snapshot.val()).map(([id, data]) => ({
-          id,
-          ...data,
-          userId
-        }));
+      if (!snapshot.exists()) {
+        console.log('No rooms found for property');
+        return [];
       }
       
-      console.log('Retrieved rooms:', rooms);
+      const rooms = [];
+      snapshot.forEach((childSnapshot) => {
+        const room = childSnapshot.val();
+        if (room.userId === userId) {
+          rooms.push({
+            id: childSnapshot.key,
+            ...room
+          });
+        }
+      });
       
-      // Store in local storage for offline access
-      await AsyncStorage.setItem(`rooms_${propertyId}_${userId}`, JSON.stringify(rooms));
+      console.log(`Found ${rooms.length} rooms for property`);
       return rooms;
     } catch (error) {
       console.error('Error getting property rooms:', error);
-      console.error('Error code:', error.code);
-      console.error('Error message:', error.message);
-      
-      if (error.code === 'unavailable' || error.code === 'permission-denied') {
-        console.log('Attempting to get rooms from local storage...');
-        try {
-          const localData = await AsyncStorage.getItem(`rooms_${propertyId}_${userId}`);
-          if (localData) {
-            console.log('Retrieved rooms from local storage');
-            return JSON.parse(localData);
-          }
-        } catch (localError) {
-          console.error('Error getting rooms from local storage:', localError);
-        }
-        
-        console.log('Returning empty array due to offline state');
-        return [];
-      }
       throw error;
     }
   }
 
   // Add or update a room
   async setRoom(propertyId, roomId, data, userId) {
-    console.log('Setting room:', roomId);
-    console.log('Room data:', data);
-    
+    console.log('Setting room data:', roomId);
     try {
-      await set(ref(db, `rooms/${roomId}/propertyId`), propertyId);
-      await set(ref(db, `rooms/${roomId}/userId`), userId);
-      await set(ref(db, `rooms/${roomId}/updatedAt`), new Date().toISOString());
-      console.log('Room set successfully');
+      const roomData = {
+        ...data,
+        propertyId,
+        userId,
+        updatedAt: new Date().toISOString()
+      };
       
-      // Update local storage for both property-specific and user-specific storage
-      const propertyRooms = await this.getPropertyRooms(propertyId, userId);
-      const userRooms = await this.getUserRooms(userId);
-      
-      const updatedPropertyRooms = propertyRooms.filter(r => r.id !== roomId);
-      updatedPropertyRooms.push({ id: roomId, ...data, propertyId, userId });
-      await AsyncStorage.setItem(`rooms_${propertyId}_${userId}`, JSON.stringify(updatedPropertyRooms));
-      
-      const updatedUserRooms = userRooms.filter(r => r.id !== roomId);
-      updatedUserRooms.push({ id: roomId, ...data, propertyId, userId });
-      await AsyncStorage.setItem(`rooms_${userId}`, JSON.stringify(updatedUserRooms));
+      await set(ref(db, `rooms/${roomId}`), roomData);
+      console.log('Room data set successfully');
     } catch (error) {
-      console.error('Error setting room:', error);
-      console.error('Error code:', error.code);
-      console.error('Error message:', error.message);
-      
-      if (error.code === 'unavailable' || error.code === 'permission-denied') {
-        console.log('Storing room data locally due to offline state');
-        const propertyRooms = await this.getPropertyRooms(propertyId, userId);
-        const userRooms = await this.getUserRooms(userId);
-        
-        const updatedPropertyRooms = propertyRooms.filter(r => r.id !== roomId);
-        updatedPropertyRooms.push({ id: roomId, ...data, propertyId, userId });
-        await AsyncStorage.setItem(`rooms_${propertyId}_${userId}`, JSON.stringify(updatedPropertyRooms));
-        
-        const updatedUserRooms = userRooms.filter(r => r.id !== roomId);
-        updatedUserRooms.push({ id: roomId, ...data, propertyId, userId });
-        await AsyncStorage.setItem(`rooms_${userId}`, JSON.stringify(updatedUserRooms));
-        return;
-      }
+      console.error('Error setting room data:', error);
       throw error;
     }
   }
 
-  // Delete a room
-  async deleteRoom(roomId, userId) {
-    console.log('Deleting room:', roomId);
+  // Create a new property
+  async createProperty(propertyData) {
+    console.log('Creating new property');
     try {
-      await remove(ref(db, `rooms/${roomId}/propertyId`));
-      await remove(ref(db, `rooms/${roomId}/userId`));
-      await remove(ref(db, `rooms/${roomId}/updatedAt`));
-      console.log('Room deleted successfully');
+      const newPropertyRef = push(ref(db, 'properties'));
+      const propertyId = newPropertyRef.key;
       
-      // Update local storage for both property-specific and user-specific storage
-      const propertyRooms = await this.getPropertyRooms(propertyId, userId);
-      const userRooms = await this.getUserRooms(userId);
+      const property = {
+        ...propertyData,
+        id: propertyId,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
       
-      const updatedPropertyRooms = propertyRooms.filter(r => r.id !== roomId);
-      await AsyncStorage.setItem(`rooms_${propertyId}_${userId}`, JSON.stringify(updatedPropertyRooms));
-      
-      const updatedUserRooms = userRooms.filter(r => r.id !== roomId);
-      await AsyncStorage.setItem(`rooms_${userId}`, JSON.stringify(updatedUserRooms));
+      await set(newPropertyRef, property);
+      console.log('Property created successfully:', propertyId);
+      return property;
     } catch (error) {
-      console.error('Error deleting room:', error);
-      console.error('Error code:', error.code);
-      console.error('Error message:', error.message);
+      console.error('Error creating property:', error);
+      throw error;
+    }
+  }
+
+  // Create a new room
+  async createRoom(roomData) {
+    console.log('Creating new room');
+    try {
+      const newRoomRef = push(ref(db, 'rooms'));
+      const roomId = newRoomRef.key;
       
-      if (error.code === 'unavailable' || error.code === 'permission-denied') {
-        console.log('Room deletion queued for when online');
-        const propertyRooms = await this.getPropertyRooms(propertyId, userId);
-        const userRooms = await this.getUserRooms(userId);
-        
-        const updatedPropertyRooms = propertyRooms.filter(r => r.id !== roomId);
-        await AsyncStorage.setItem(`rooms_${propertyId}_${userId}`, JSON.stringify(updatedPropertyRooms));
-        
-        const updatedUserRooms = userRooms.filter(r => r.id !== roomId);
-        await AsyncStorage.setItem(`rooms_${userId}`, JSON.stringify(updatedUserRooms));
-        return;
-      }
+      const room = {
+        ...roomData,
+        id: roomId,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+      
+      await set(newRoomRef, room);
+      console.log('Room created successfully:', roomId);
+      return room;
+    } catch (error) {
+      console.error('Error creating room:', error);
       throw error;
     }
   }
 }
 
-export default new FirebaseService(); 
+export default new FirebaseService();

@@ -1,5 +1,6 @@
 import { initializeApp } from 'firebase/app';
 import { getDatabase, ref, set, get, update, remove, query, orderByChild, equalTo, onValue, off } from 'firebase/database';
+import { getAuth } from 'firebase/auth';
 import { getAnalytics, isSupported } from 'firebase/analytics';
 import ReactNativeAsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -23,6 +24,11 @@ console.log('Initializing Firebase app...');
 const app = initializeApp(firebaseConfig);
 console.log('Firebase app initialized successfully');
 
+// Initialize Authentication
+console.log('Initializing Firebase Authentication...');
+const auth = getAuth(app);
+console.log('Firebase Authentication initialized successfully');
+
 // Initialize Realtime Database
 console.log('Initializing Realtime Database...');
 const db = getDatabase(app);
@@ -44,4 +50,4 @@ isSupported()
     console.error('Error initializing analytics:', err);
   });
 
-export { app, db, analytics }; 
+export { app, db, auth, analytics }; 

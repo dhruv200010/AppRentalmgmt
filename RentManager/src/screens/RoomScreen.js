@@ -19,7 +19,7 @@ const RoomScreen = ({ route }) => {
   const { propertyId } = route.params;
   const dispatch = useDispatch();
   const property = useSelector((state) =>
-    state.properties.properties.find((p) => p.id === propertyId)
+    state.properties?.properties?.find((p) => p.id === propertyId) || { rooms: [] }
   );
 
   const [modalVisible, setModalVisible] = useState(false);
@@ -31,6 +31,9 @@ const RoomScreen = ({ route }) => {
   const [occupiedUntil, setOccupiedUntil] = useState(new Date());
   const [isMonthToMonth, setIsMonthToMonth] = useState(false);
 
+  // Ensure property.rooms is always an array
+  const rooms = property?.rooms || [];
+
   const handleAddRoom = () => {
     if (!tenant || !roomType) {
       Alert.alert('Error', 'Please fill in all required fields');
@@ -38,9 +41,9 @@ const RoomScreen = ({ route }) => {
     }
 
     // Check for duplicate room numbers
-    const isDuplicate = property.rooms.some(room => 
+    const isDuplicate = property?.rooms?.some(room => 
       room.type === roomType && (!editingRoom || room.id !== editingRoom.id)
-    );
+    ) || false;
 
     if (isDuplicate) {
       Alert.alert('Error', `Room number ${roomType} already exists in this property`);
@@ -142,7 +145,7 @@ const RoomScreen = ({ route }) => {
       </TouchableOpacity>
 
       <FlatList
-        data={property?.rooms || []}
+        data={rooms}
         renderItem={renderRoom}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listContainer}
