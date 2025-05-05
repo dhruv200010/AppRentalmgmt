@@ -16,14 +16,26 @@
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.rentmanager.app"
+      "bundleIdentifier": "com.rentmanager.app",
+      "config": {
+        "googleSignIn": {
+          "reservedClientId": "com.googleusercontent.apps.640916639753-rdfjar4de2l4mochup7fnb6jk98ok1ts"
+        }
+      }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "package": "com.rentmanager.app"
+      "package": "com.rentmanager.app",
+      "googleServicesFile": "./google-services.json",
+      "config": {
+        "googleSignIn": {
+          "apiKey": "AIzaSyCXlisiV-xSOZIka1SuOWPfIZ1oxhF18M8",
+          "certificateHash": "YOUR_SHA1_CERTIFICATE_HASH"
+        }
+      }
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -31,6 +43,15 @@
     "sdkVersion": "52.0.0",
     "experiments": {
       "newArchEnabled": true
-    }
+    },
+    "scheme": "rentmanager",
+    "plugins": [
+      [
+        "expo-auth-session",
+        {
+          "redirectUri": "rentmanager://oauth2redirect/google"
+        }
+      ]
+    ]
   }
 }

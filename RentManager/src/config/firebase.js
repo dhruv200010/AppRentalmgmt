@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app';
-import { getDatabase, ref, set, get, update, remove, query, orderByChild, equalTo, onValue, off } from 'firebase/database';
+import { getDatabase } from 'firebase/database';
 import { getAuth } from 'firebase/auth';
 import { getAnalytics, isSupported } from 'firebase/analytics';
 import ReactNativeAsyncStorage from '@react-native-async-storage/async-storage';
@@ -9,7 +9,7 @@ console.log('Starting Firebase initialization...');
 
 // Your Firebase configuration
 const firebaseConfig = {
-  apiKey: "AIzaSyCXlisiV-xSOZIka1SuOWPfIZ1oxhF18M8",
+  apiKey: "AIzaSyDDD4Fs_FQhkmiKAnO4xH9JmBBKY9UyK-M",
   authDomain: "ntmanager-d8562.firebaseapp.com",
   projectId: "ntmanager-d8562",
   storageBucket: "ntmanager-d8562.firebasestorage.app",
@@ -20,19 +20,19 @@ const firebaseConfig = {
 };
 
 // Initialize Firebase
-console.log('Initializing Firebase app...');
+console.log('Initializing Firebase...');
 const app = initializeApp(firebaseConfig);
-console.log('Firebase app initialized successfully');
+console.log('Firebase initialized successfully');
+
+// Initialize Database
+console.log('Initializing Firebase Database...');
+const db = getDatabase(app);
+console.log('Firebase Database initialized successfully');
 
 // Initialize Authentication
 console.log('Initializing Firebase Authentication...');
 const auth = getAuth(app);
 console.log('Firebase Authentication initialized successfully');
-
-// Initialize Realtime Database
-console.log('Initializing Realtime Database...');
-const db = getDatabase(app);
-console.log('Realtime Database initialized successfully');
 
 // Initialize Analytics only if supported
 let analytics = null;
