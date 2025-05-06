@@ -1,0 +1,51 @@
+{
+  "cli": {
+    "version": ">= 5.9.1",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "android": {
+        "gradleCommand": ":app:assembleDebug",
+        "buildType": "apk",
+        "env": {
+          "GOOGLE_SERVICES_JSON": "$(GOOGLE_SERVICES_JSON)"
+        }
+      },
+      "ios": {
+        "simulator": true,
+        "resourceClass": "m-medium"
+      }
+    },
+    "preview": {
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk",
+        "env": {
+          "GOOGLE_SERVICES_JSON": "$(GOOGLE_SERVICES_JSON)"
+        }
+      },
+      "ios": {
+        "simulator": true,
+        "resourceClass": "m-medium"
+      }
+    },
+    "production": {
+      "android": {
+        "buildType": "app-bundle",
+        "env": {
+          "GOOGLE_SERVICES_JSON": "$(GOOGLE_SERVICES_JSON)"
+        }
+      },
+      "ios": {
+        "simulator": true,
+        "resourceClass": "m-medium"
+      }
+    }
+  },
+  "submit": {
+    "production": {}
+  }
+} 
